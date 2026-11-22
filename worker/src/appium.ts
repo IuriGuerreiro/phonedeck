@@ -18,13 +18,14 @@ export async function startAppium(port: number, logDir: string): Promise<AppiumS
 
   mkdirSync(logDir, { recursive: true });
   const log = createWriteStream(path.join(logDir, "appium.log"), { flags: "a" });
-  const appiumMain = createRequire(import.meta.url).resolve("appium");
+  const env = toolEnv();
+  const appiumMain = resolveAppium(env.APPIUM_HOME!);
 
   const child: ChildProcess = spawn(
     process.execPath,
     [appiumMain, "--address", "127.0.0.1", "--port", String(port), "--log-no-colors"],
     {
-      env: toolEnv(),
+      env,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -51,6 +52,15 @@ async function isUp(port: number): Promise<boolean> {
     return res.ok;
   } catch {
     return false;
+  }
+}
+
+/** Prefer an Appium installed in APPIUM_HOME (the app's PC setup puts one there), else ours. */
+function resolveAppium(appiumHome: string): string {
+  try {
+    return createRequire(path.join(appiumHome, "package.json")).resolve("appium");
+  } catch {
+    return createRequire(import.meta.url).resolve("appium");
   }
 }
 
