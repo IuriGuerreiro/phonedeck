@@ -1,0 +1,19 @@
+{
+  "name": "worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.ts",
+    "typecheck": "tsc",
+    "appium:setup": "APPIUM_HOME=$PWD/.appium appium driver install uiautomator2"
+  },
+  "dependencies": {
+    "appium": "^3.9.1",
+    "webdriverio": "^10.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0"
+  }
+}
