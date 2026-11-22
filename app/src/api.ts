@@ -25,7 +25,42 @@ export type JobRun = {
   finishedAt: string | null;
 };
 
-export type Job = { action: "open_app"; package: string } | { action: "swipe_up" };
+/** Platforms with account automation. Only TikTok for now. */
+export type PlatformId = "tiktok";
+
+export type Job =
+  | { action: "open_app"; package: string }
+  | { action: "swipe_up" }
+  | { action: "list_accounts"; platform: PlatformId }
+  | { action: "switch_account"; platform: PlatformId; username: string }
+  | {
+      action: "warmup";
+      platform: PlatformId;
+      /** Switch to this account first; omit to warm up whichever account is active. */
+      username?: string;
+      minutes: number;
+      /** Seconds on each video: random in [watchMinSec, watchMaxSec]. */
+      watchMinSec: number;
+      watchMaxSec: number;
+      /** 0..1 */
+      likeChance: number;
+      /** 0..1 */
+      followChance: number;
+      /** Niche keywords to search; empty = the For You feed. */
+      keywords: string[];
+    };
+
+export type Account = {
+  id: number;
+  serial: string;
+  platform: PlatformId;
+  username: string;
+  status: "ok" | "needs_attention";
+  note: string | null;
+  lastWarmupAt: string | null;
+};
+
+export type JobProgress = { serial: string; message: string };
 
 export const api = {
   listDevices: () => invoke<Device[]>("list_devices"),
@@ -33,7 +68,12 @@ export const api = {
   workerStatus: () => invoke<WorkerStatus>("worker_status"),
   restartWorker: () => invoke<void>("restart_worker"),
   runJob: (serial: string, job: Job) => invoke<unknown>("run_job", { serial, job }),
+  stopJob: (serial: string) => invoke<void>("stop_job", { serial }),
+  listAccounts: (serial: string) => invoke<Account[]>("list_accounts", { serial }),
+  deleteAccount: (id: number) => invoke<void>("delete_account", { id }),
   recentRuns: (limit = 50) => invoke<JobRun[]>("recent_runs", { limit }),
+  onJobProgress: (cb: (p: JobProgress) => void) =>
+    listen<JobProgress>("job-progress", (e) => cb(e.payload)),
   onWorkerStatus: (cb: (s: WorkerStatus) => void) =>
     listen<WorkerStatus>("worker-status", (e) => cb(e.payload)),
 };
