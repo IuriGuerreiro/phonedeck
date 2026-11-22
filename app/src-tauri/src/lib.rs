@@ -1,5 +1,6 @@
 mod adb;
 mod db;
+mod setup;
 mod worker;
 
 use serde::Serialize;
@@ -108,6 +109,7 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+            setup::init(&data_dir);
             app.manage(Db::open(&data_dir.join("sma.db"))?);
 
             let worker = Worker::new();
@@ -122,6 +124,11 @@ pub fn run() {
             restart_worker,
             run_job,
             recent_runs,
+            setup::setup_status,
+            setup::setup_install,
+            setup::phone::install_udev_rule,
+            setup::phone::phone_info,
+            setup::phone::install_helper_apks,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
