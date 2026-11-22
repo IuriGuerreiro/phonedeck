@@ -1,0 +1,9 @@
+{
+  "name": "phonedeck",
+  "private": true,
+  "scripts": {
+    "setup": "npm --prefix worker install && npm --prefix worker run appium:setup && npm --prefix app install",
+    "dev": "npm --prefix app run tauri dev",
+    "check": "npm --prefix worker run typecheck && npm --prefix app run build && cargo test --manifest-path app/src-tauri/Cargo.toml"
+  }
+}
