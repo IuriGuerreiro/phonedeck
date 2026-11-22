@@ -9,8 +9,7 @@ import path from "node:path";
 import { startAppium } from "./appium.ts";
 import { closeAll, setAppiumPort } from "./devices.ts";
 import { runJob, type Job } from "./actions.ts";
-
-const send = (msg: object) => process.stdout.write(JSON.stringify(msg) + "\n");
+import { send } from "./protocol.ts";
 
 const port = Number(process.env.SMA_APPIUM_PORT ?? 4723);
 const logDir = process.env.SMA_LOG_DIR ?? path.join(os.tmpdir(), "sma-logs");
@@ -35,7 +34,13 @@ rl.on("line", async (line) => {
     const result = await runJob(msg.job);
     send({ id, ok: true, result });
   } catch (err) {
-    send({ id, ok: false, error: err instanceof Error ? err.message : String(err) });
+    const code = (err as { code?: unknown })?.code;
+    send({
+      id,
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      code: typeof code === "string" ? code : undefined,
+    });
   }
 });
 
