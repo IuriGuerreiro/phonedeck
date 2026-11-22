@@ -12,6 +12,9 @@ pub fn adb_path() -> PathBuf {
     if let Some(p) = std::env::var_os("SMA_ADB") {
         return p.into();
     }
+    if let Some(p) = crate::setup::managed_adb() {
+        return p;
+    }
     let sdks = ["ANDROID_HOME", "ANDROID_SDK_ROOT"]
         .iter()
         .filter_map(std::env::var_os)
@@ -45,7 +48,16 @@ fn parse(text: &str) -> Vec<AdbDevice> {
         .filter_map(|line| {
             let mut parts = line.split_whitespace();
             let serial = parts.next()?.to_string();
-            let state = parts.next()?.to_string();
+            let mut state = parts.next()?.to_string();
+            // "no permissions (missing udev rules? ...); see [...]" spans several words.
+            if state == "no" {
+                state = "no permissions".into();
+                for p in parts.by_ref() {
+                    if p.ends_with(']') {
+                        break;
+                    }
+                }
+            }
             let model = parts
                 .find_map(|p| p.strip_prefix("model:"))
                 .map(|m| m.replace('_', " "));
@@ -62,9 +74,11 @@ mod tests {
     fn parses_devices_output() {
         let out = "* daemon started successfully\nList of devices attached\n\
                    470955eb               device usb:1-2 product:sweet model:Redmi_Note_10 device:sweet transport_id:3\n\
-                   emulator-5554          unauthorized transport_id:4\n\n";
+                   emulator-5554          unauthorized transport_id:4\n\
+                   ABC123                 no permissions (missing udev rules? user is in the plugdev group); see [http://developer.android.com/tools/device.html] usb:1-3 transport_id:5\n\n";
         let d = parse(out);
-        assert_eq!(d.len(), 2);
+        assert_eq!(d.len(), 3);
+        assert_eq!(d[2].state, "no permissions");
         assert_eq!(d[0].serial, "470955eb");
         assert_eq!(d[0].state, "device");
         assert_eq!(d[0].model.as_deref(), Some("Redmi Note 10"));

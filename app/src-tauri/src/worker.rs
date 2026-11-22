@@ -81,6 +81,7 @@ impl Worker {
             .arg(dir.join("src/main.ts"))
             .current_dir(&dir)
             .env("SMA_LOG_DIR", &log_dir)
+            .envs(crate::setup::worker_env())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
@@ -198,7 +199,7 @@ fn set_status(app: &AppHandle, status: &Mutex<WorkerStatus>, next: WorkerStatus)
     let _ = app.emit("worker-status", next);
 }
 
-fn worker_dir() -> PathBuf {
+pub(crate) fn worker_dir() -> PathBuf {
     std::env::var_os("SMA_WORKER_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../worker"))

@@ -20,6 +20,12 @@ npm run dev     # start the app
 npm run check   # typecheck, build, tests
 ```
 
+**Setup screen:** the app's **Setup** button checks Node, JDK, adb and Appium, and installs
+anything missing into `~/.local/share/com.sma.desktop/tools` (no sudo). It also adds the Linux
+USB rule (via pkexec) and walks each phone through setup. `SMA_DATA_DIRECTORY` moves the tools folder.
+Test the real downloads: `SMA_DATA_DIRECTORY=/tmp/x cargo test real_install -- --ignored --nocapture`
+(in `app/src-tauri`).
+
 Phone: enable USB debugging. On Xiaomi also enable **Install via USB** and
 **USB debugging (Security settings)** in Developer options, or Appium can't install its helper app.
 
