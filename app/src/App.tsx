@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { SetupLauncher } from "@/setup/SetupLauncher";
 
 const APPS = [
   { id: "instagram", label: "Instagram", package: "com.instagram.android" },
@@ -95,7 +96,10 @@ export default function App() {
     <div className="min-h-screen bg-background text-foreground">
       <header className="flex items-center justify-between border-b px-6 py-3">
         <h1 className="text-base font-semibold">PhoneDeck</h1>
-        <EngineStatus status={worker} onRestart={() => api.restartWorker()} />
+        <div className="flex items-center gap-2">
+          <SetupLauncher />
+          <EngineStatus status={worker} onRestart={() => api.restartWorker()} />
+        </div>
       </header>
 
       <main className="grid gap-4 p-6 md:grid-cols-[320px_1fr]">
