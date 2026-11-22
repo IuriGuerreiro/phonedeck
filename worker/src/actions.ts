@@ -23,6 +23,8 @@ export type WarmupOptions = {
   keywords?: string[];
 };
 
+const KEYCODE_HOME = 3;
+
 /** Videos to watch per keyword before searching the next one. */
 const VIDEOS_PER_KEYWORD: [number, number] = [6, 12];
 
@@ -152,6 +154,12 @@ async function warmup(s: Browser, serial: string, p: Platform, opts: WarmupOptio
       `Warm-up${where}: ${stats.videos} videos, ${stats.likes} likes, ${stats.follows} follows, ~${left} min left`,
     );
   }
+
+  // Done (or stopped): close the app and leave the phone on its home screen.
+  // Not on errors: a needs-attention screen should stay up for a person to see.
+  progress(serial, `Closing ${p.id}…`);
+  await s.execute("mobile: pressKey", { keycode: KEYCODE_HOME }).catch(() => {});
+  await s.terminateApp(p.package).catch(() => {});
 
   return { ...stats, stopped: shouldStop(serial) };
 }
