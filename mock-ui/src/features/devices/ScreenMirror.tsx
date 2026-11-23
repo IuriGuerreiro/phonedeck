@@ -91,28 +91,34 @@ export function ScreenMirror({ device, task }: { device: Device; task: LiveTask 
         </div>
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-3">
-        {task.kind === "warmup" ? (
-          <WarmupScreen key={device.serial} task={task} paused={paused} big={big} />
-        ) : (
-          <PhoneFrame big={big}>
-            {task.kind === "idle" ? (
-              <HomeScreen />
-            ) : (
-              <div className="flex h-full flex-col items-center justify-center gap-2 bg-neutral-950 p-6 text-center text-xs text-neutral-400">
-                <Monitor className="size-8" />
-                No screen
-                <span className="text-neutral-500">{task.reason}</span>
-              </div>
-            )}
-          </PhoneFrame>
-        )}
+        <LiveScreen serial={device.serial} task={task} paused={paused} size={big ? "lg" : "md"} />
         {task.kind === "idle" && <p className="text-xs text-muted-foreground">Idle. Nothing is running.</p>}
       </CardContent>
     </Card>
   );
 }
 
-function WarmupScreen({ task, paused, big }: { task: Extract<LiveTask, { kind: "warmup" }>; paused: boolean; big: boolean }) {
+export type ScreenSize = "sm" | "md" | "lg";
+
+/** The phone screen for whatever the phone is doing. `sm` is the compact control-room size. */
+export function LiveScreen({ serial, task, paused, size }: { serial: string; task: LiveTask; paused: boolean; size: ScreenSize }) {
+  if (task.kind === "warmup") return <WarmupScreen key={serial} task={task} paused={paused} size={size} />;
+  return (
+    <PhoneFrame size={size}>
+      {task.kind === "idle" ? (
+        <HomeScreen />
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center gap-2 bg-neutral-950 p-4 text-center text-xs text-neutral-400">
+          <Monitor className="size-8" />
+          No screen
+          {size !== "sm" && <span className="text-neutral-500">{task.reason}</span>}
+        </div>
+      )}
+    </PhoneFrame>
+  );
+}
+
+function WarmupScreen({ task, paused, size }: { task: Extract<LiveTask, { kind: "warmup" }>; paused: boolean; size: ScreenSize }) {
   const nextId = useRef(1);
   const [videos, setVideos] = useState(() => [makeVideo(0), makeVideo(1)]);
   const [index, setIndex] = useState(0);
@@ -151,7 +157,7 @@ function WarmupScreen({ task, paused, big }: { task: Extract<LiveTask, { kind: "
 
   return (
     <>
-      <PhoneFrame big={big}>
+      <PhoneFrame size={size}>
         <div className="relative h-full overflow-hidden bg-black">
           <div
             className="h-full transition-transform duration-500 ease-out"
@@ -169,7 +175,7 @@ function WarmupScreen({ task, paused, big }: { task: Extract<LiveTask, { kind: "
         </div>
       </PhoneFrame>
 
-      <div className="w-full rounded-lg border bg-muted/40 p-2">
+      {size !== "sm" && <div className="w-full rounded-lg border bg-muted/40 p-2">
         <div className="mb-1 flex items-center justify-between text-xs">
           <span className="font-medium">Warm-up · @{task.account}</span>
           <span className="text-muted-foreground">Video {index + 1}</span>
@@ -181,7 +187,7 @@ function WarmupScreen({ task, paused, big }: { task: Extract<LiveTask, { kind: "
             </li>
           ))}
         </ul>
-      </div>
+      </div>}
     </>
   );
 }
@@ -242,9 +248,11 @@ function HomeScreen() {
 }
 
 /** Phone outline with a status bar and Android nav buttons. */
-function PhoneFrame({ big, children }: { big: boolean; children: React.ReactNode }) {
+const FRAME_WIDTH: Record<ScreenSize, string> = { sm: "w-40", md: "w-56", lg: "w-72" };
+
+function PhoneFrame({ size, children }: { size: ScreenSize; children: React.ReactNode }) {
   return (
-    <div className={cn("flex flex-col items-center gap-2 transition-all", big ? "w-72" : "w-56")}>
+    <div className={cn("flex flex-col items-center gap-2 transition-all", FRAME_WIDTH[size])}>
       <div className="relative aspect-[9/19.5] w-full overflow-hidden rounded-[2rem] border-[6px] border-neutral-900 bg-black shadow-xl">
         <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-1.5 text-[9px] font-medium text-white">
           <span>{new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
@@ -253,7 +261,7 @@ function PhoneFrame({ big, children }: { big: boolean; children: React.ReactNode
         </div>
         {children}
       </div>
-      <div className="flex gap-6 text-muted-foreground">
+      {size !== "sm" && <div className="flex gap-6 text-muted-foreground">
         <Button size="icon-xs" variant="ghost" title="Back (mock)">
           <Triangle className="-rotate-90" />
         </Button>
@@ -263,7 +271,7 @@ function PhoneFrame({ big, children }: { big: boolean; children: React.ReactNode
         <Button size="icon-xs" variant="ghost" title="Recent apps (mock)">
           <Square />
         </Button>
-      </div>
+      </div>}
     </div>
   );
 }

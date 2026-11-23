@@ -25,9 +25,10 @@ on your Tailscale network: `http://<tailscale-ip>:1430` or `http://<machine>.<ta
 src/
   App.tsx              # sidebar (grouped, with status badges) + Reset button
   components/ui/       # shadcn components only (copied from app/)
+  components/shared/   # our own reusable pieces (e.g. charts.tsx)
   lib/utils.ts         # cn()
   lib/mock.ts          # delay(), randInt(), timeAgo() for fake backends
-  mocks/               # fake backends shared by 2+ features (e.g. devices.ts)
+  mocks/               # fake backends shared by 2+ features (devices.ts, groups.ts)
   settings/            # the Settings modal (opened from the sidebar)
     sections.ts        # list of settings sections, in order
     SettingRow.tsx     # SettingSection + SettingRow layout pieces

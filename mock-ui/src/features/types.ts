@@ -15,6 +15,8 @@ export type Feature = {
   page: ComponentType;
   /** Put the feature's fake data back to its start. Shown as a Reset button. */
   reset?: () => void;
+  /** Hook returning a number to show next to the sidebar item (e.g. open alerts). 0 hides it. */
+  useCount?: () => number;
   /** Use the full width instead of the centered column. */
   wide?: boolean;
 };
