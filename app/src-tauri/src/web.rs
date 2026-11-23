@@ -42,6 +42,8 @@ pub struct WebInfo {
     pub token: String,
     /// e.g. "http://100.101.102.103:1440". Empty when off.
     pub urls: Vec<String>,
+    /// Address the desktop window itself uses (screen mirroring goes through the server).
+    pub local_url: Option<String>,
     /// Why the server isn't running, if it isn't.
     pub error: Option<String>,
 }
@@ -58,7 +60,14 @@ pub fn start(app: &AppHandle, data_dir: &FsPath) -> WebInfo {
     let token = load_or_create_token(data_dir);
     let addr = std::env::var("SMA_WEB_ADDR").unwrap_or_else(|_| "0.0.0.0:1440".into());
     let port = addr.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(1440);
-    let off = |error: Option<String>| WebInfo { enabled: false, port, token: token.clone(), urls: vec![], error };
+    let off = |error: Option<String>| WebInfo {
+        enabled: false,
+        port,
+        token: token.clone(),
+        urls: vec![],
+        local_url: None,
+        error,
+    };
 
     if std::env::var("SMA_WEB").as_deref() == Ok("0") {
         return off(None);
@@ -87,6 +96,7 @@ pub fn start(app: &AppHandle, data_dir: &FsPath) -> WebInfo {
         .route("/api/ping", get(ping))
         .route("/api/cmd/{name}", post(command))
         .route("/api/events", get(events_ws))
+        .route("/api/mirror/{serial}", get(mirror_ws))
         .fallback(get(static_file))
         .with_state(ctx);
 
@@ -107,7 +117,9 @@ pub fn start(app: &AppHandle, data_dir: &FsPath) -> WebInfo {
         vec![format!("http://{addr}")]
     };
     println!("[web] PhoneDeck web access on {}", urls.join(", "));
-    WebInfo { enabled: true, port, token, urls, error: None }
+    let local_ip = if addr.ip().is_unspecified() { "127.0.0.1".to_string() } else { addr.ip().to_string() };
+    let local_url = Some(format!("http://{local_ip}:{port}"));
+    WebInfo { enabled: true, port, token, urls, local_url, error: None }
 }
 
 /// Web address and token, for Settings → Web access.
@@ -121,6 +133,15 @@ pub fn web_info(info: tauri::State<'_, WebInfo>) -> WebInfo {
 #[derive(Deserialize)]
 struct TokenQuery {
     token: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct MirrorQuery {
+    token: Option<String>,
+    /// Longest side of the video in pixels.
+    max: Option<u32>,
+    /// `0`: control only, no video frames (the page shows screenshots instead).
+    video: Option<u8>,
 }
 
 fn authorized(ctx: &Ctx, headers: &HeaderMap, query: Option<&str>) -> bool {
@@ -244,6 +265,22 @@ async fn events_ws(
     }
     let rx = ctx.events.subscribe();
     ws.on_upgrade(move |socket| forward_events(socket, rx))
+}
+
+/// Live, controllable screen for one phone (see `mirror.rs`).
+async fn mirror_ws(
+    State(ctx): State<Ctx>,
+    Path(serial): Path<String>,
+    headers: HeaderMap,
+    Query(q): Query<MirrorQuery>,
+    ws: WebSocketUpgrade,
+) -> Response {
+    if !authorized(&ctx, &headers, q.token.as_deref()) {
+        return unauthorized();
+    }
+    let max = q.max.unwrap_or(1024).clamp(240, 2400);
+    let send_video = q.video != Some(0);
+    ws.on_upgrade(move |socket| crate::mirror::serve(socket, serial, max, send_video))
 }
 
 async fn forward_events(mut socket: WebSocket, mut rx: broadcast::Receiver<String>) {

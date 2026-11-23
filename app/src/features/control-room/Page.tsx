@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { deviceLabel, devicesApi, deviceState, isReady, type Device } from "@/data/devices";
 import { elapsed, liveJobText, useDeviceStats, useLiveJobs, type LiveJob } from "@/data/live";
-import { LiveScreen, type ScreenSize } from "../devices/LiveScreen";
+import type { ScreenSize } from "../devices/LiveScreen";
+import { MirrorScreen } from "../devices/MirrorScreen";
 
 export default function ControlRoomPage() {
   const [devices, setDevices] = useState<Device[] | null>(null);
@@ -47,7 +48,7 @@ export default function ControlRoomPage() {
               {{ sm: "Small", md: "Medium", lg: "Large" }[s]}
             </Button>
           ))}
-          <Button size="sm" variant="outline" onClick={() => setPaused(!paused)} title="Stops screenshots, not jobs">
+          <Button size="sm" variant="outline" onClick={() => setPaused(!paused)} title="Disconnects the live screens; jobs keep running">
             {paused ? <Play /> : <Pause />} {paused ? "Resume screens" : "Pause screens"}
           </Button>
         </div>
@@ -90,7 +91,7 @@ function PhoneTile({ device: d, job, paused, size }: { device: Device; job?: Liv
           <span className="truncate text-sm font-medium">{deviceLabel(d)}</span>
           <Badge variant={ready ? "secondary" : "destructive"}>{deviceState(d).label}</Badge>
         </div>
-        <LiveScreen serial={d.serial} ready={ready} paused={paused} size={size} />
+        <MirrorScreen serial={d.serial} ready={ready} paused={paused} size={size} />
         <div className="flex w-full flex-col gap-1 text-xs">
           <div className="flex items-center justify-between gap-2">
             <span className="flex min-w-0 items-center gap-1.5 font-medium">

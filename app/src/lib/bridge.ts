@@ -121,3 +121,31 @@ export function reconnectEvents() {
   socket = null;
   connect();
 }
+
+// ---------- screen mirroring ----------
+
+let localServer: Promise<{ url: string; token: string } | null> | null = null;
+
+/** Where the desktop window reaches the app's own web server (mirroring runs through it). */
+function desktopServer() {
+  localServer ??= tauriInvoke<{ enabled: boolean; localUrl: string | null; token: string }>("web_info").then(
+    (i) => (i.enabled && i.localUrl ? { url: i.localUrl, token: i.token } : null),
+    () => null,
+  );
+  return localServer;
+}
+
+/**
+ * WebSocket URL for a phone's live, controllable screen, or null when web access is off.
+ * `video: false` = control only (no video frames), for pages that can't decode video.
+ */
+export async function mirrorUrl(serial: string, maxSize: number, video = true): Promise<string | null> {
+  const path = `/api/mirror/${encodeURIComponent(serial)}?max=${maxSize}${video ? "" : "&video=0"}`;
+  if (inTauri) {
+    const s = await desktopServer();
+    if (!s) return null;
+    return `${s.url.replace(/^http/, "ws")}${path}&token=${encodeURIComponent(s.token)}`;
+  }
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${window.location.host}${path}&token=${encodeURIComponent(getToken() ?? "")}`;
+}

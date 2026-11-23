@@ -37,6 +37,8 @@ Phone: enable USB debugging. On Xiaomi also enable **Install via USB** and
 **Web access:** the app also serves its UI at `http://<this-pc>:1440` for browsers on other devices
 (same Wi-Fi or Tailscale). Copy the link with the token from **Settings → Web access**.
 `SMA_WEB_ADDR=127.0.0.1:1440` keeps it on this PC only; `SMA_WEB=0` turns it off.
+The Devices page and Control room show each phone's live screen (scrcpy, installed from Setup):
+click and drag to tap and swipe, scroll to scroll, type to send text, Esc or right-click for Back.
 In dev builds the web page serves `app/dist`, so run `npm --prefix app run build` after UI changes.
 
 Logs: `~/.local/share/com.sma.desktop/logs/appium.log`. Database: `~/.local/share/com.sma.desktop/sma.db`.

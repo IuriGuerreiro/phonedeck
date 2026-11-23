@@ -76,6 +76,13 @@ fn managed() -> Option<Managed> {
 }
 
 /// adb installed by PhoneDeck, if any. Used by `adb::adb_path`.
+/// The scrcpy server jar next to the scrcpy binary in use (managed install or $SMA_SCRCPY).
+pub fn scrcpy_server() -> Option<PathBuf> {
+    let bin = scrcpy_bin();
+    let dir = if bin.is_absolute() { bin.parent()?.to_path_buf() } else { managed()?.root.join("scrcpy") };
+    Some(dir.join("scrcpy-server")).filter(|p| p.exists())
+}
+
 pub fn managed_adb() -> Option<PathBuf> {
     managed().map(|m| m.adb()).filter(|p| p.exists())
 }

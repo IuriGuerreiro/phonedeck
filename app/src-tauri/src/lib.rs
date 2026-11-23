@@ -1,6 +1,7 @@
 mod adb;
 mod db;
 mod live;
+mod mirror;
 mod setup;
 mod stats;
 mod viewer;

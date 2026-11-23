@@ -15,7 +15,7 @@ import { setupApi, type PhoneInfo } from "@/setup/api";
 import { BatteryLevel } from "@/components/shared/BatteryLevel";
 import { fmtBytes, liveJobText, useDeviceStats, useLiveJobs } from "@/data/live";
 import { RunsTable } from "../activity/Page";
-import { LiveScreen } from "./LiveScreen";
+import { MirrorScreen } from "./MirrorScreen";
 import { ViewScreenButton } from "./ViewScreenButton";
 
 const APPS = [
@@ -211,7 +211,7 @@ export function DeviceDetail({ serial }: { serial: string }) {
         <CardTitle>Live screen</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-3">
-        <LiveScreen serial={serial} ready={ready} size="lg" everyMs={2000} unavailableText={state.label} />
+        <MirrorScreen serial={serial} ready={ready} size="lg" unavailableText={state.label} />
         <div className="flex w-full items-start justify-between gap-2 text-sm">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 font-medium">
