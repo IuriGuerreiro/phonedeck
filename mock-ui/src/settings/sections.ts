@@ -1,8 +1,10 @@
 import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
-import { Flame, ShieldCheck, Tags } from "lucide-react";
+import { Flame, Palette, ShieldCheck, Tags } from "lucide-react";
 
 import { groupsApi } from "@/mocks/groups";
+import { setTheme } from "@/lib/theme";
+import { AppearanceSection } from "./appearance/AppearanceSection";
 import { GroupsSection } from "./groups/GroupsSection";
 import { SafetySection } from "./safety/SafetySection";
 import { SAFETY_DEFAULTS, setSafety } from "./safety/store";
@@ -22,6 +24,13 @@ export type SettingsSectionDef = {
 
 /** Every section in the settings modal, in order. Add new ones here. */
 export const settingsSections: SettingsSectionDef[] = [
+  {
+    id: "appearance",
+    label: "Appearance",
+    icon: Palette,
+    component: AppearanceSection,
+    restoreDefaults: () => setTheme("system"),
+  },
   {
     id: "warmup",
     label: "Warm-up",
