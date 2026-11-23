@@ -29,12 +29,12 @@ export function SetupLauncher() {
       .status()
       .then((s) => {
         setStatus(s);
-        if (s.tools.some((t) => !t.ok)) setOpen(true);
+        if (s.tools.some((t) => !t.ok && !t.optional)) setOpen(true);
       })
       .catch((e) => toast.error(String(e)));
   }, []);
 
-  const needsWork = status?.tools.some((t) => !t.ok) ?? false;
+  const needsWork = status?.tools.some((t) => !t.ok && !t.optional) ?? false;
 
   return (
     <>

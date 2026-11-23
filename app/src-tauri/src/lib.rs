@@ -1,6 +1,7 @@
 mod adb;
 mod db;
 mod setup;
+mod viewer;
 mod worker;
 
 use serde::Serialize;
@@ -161,6 +162,12 @@ fn recent_runs(db: State<'_, Db>, limit: Option<u32>) -> CmdResult<Vec<JobRun>> 
     db.recent_runs(limit.unwrap_or(50)).map_err(err)
 }
 
+/// Opens a live, view-only scrcpy window of the phone's screen.
+#[tauri::command(async)]
+fn view_phone(viewers: State<'_, viewer::Viewers>, serial: String, title: String) -> CmdResult<()> {
+    viewers.open(&serial, &title)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -174,6 +181,7 @@ pub fn run() {
             let worker = Worker::new();
             worker.start(app.handle());
             app.manage(worker);
+            app.manage(viewer::Viewers::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -191,12 +199,14 @@ pub fn run() {
             setup::phone::install_udev_rule,
             setup::phone::phone_info,
             setup::phone::install_helper_apks,
+            view_phone,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
             if let RunEvent::Exit = event {
                 app.state::<Worker>().stop();
+                app.state::<viewer::Viewers>().close_all();
             }
         });
 }

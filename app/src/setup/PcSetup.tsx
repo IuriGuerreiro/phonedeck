@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { CheckCircle2, Copy, Download, Loader2, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import { CheckCircle2, CircleDashed, Copy, Download, Loader2, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "@/api";
@@ -20,7 +20,8 @@ export function PcSetup({ status, refresh }: Props) {
     return () => void unlisten.then((f) => f());
   }, []);
 
-  const missing = status?.tools.filter((t) => !t.ok && t.canInstall) ?? [];
+  // Optional tools get their own Install button, not "Install missing".
+  const missing = status?.tools.filter((t) => !t.ok && t.canInstall && !t.optional) ?? [];
 
   async function install(ids: ToolId[]) {
     let changed = false;
@@ -99,6 +100,8 @@ function ToolRow(props: {
       <div className="flex items-center gap-3">
         {t.ok ? (
           <CheckCircle2 className="size-5 shrink-0 text-green-600" />
+        ) : t.optional ? (
+          <CircleDashed className="size-5 shrink-0 text-muted-foreground" />
         ) : (
           <XCircle className="size-5 shrink-0 text-red-500" />
         )}
@@ -106,6 +109,7 @@ function ToolRow(props: {
           <div className="flex items-center gap-2 text-sm font-medium">
             {t.name}
             {t.managed && <Badge variant="secondary">installed by PhoneDeck</Badge>}
+            {t.optional && !t.ok && <Badge variant="outline">optional</Badge>}
           </div>
           <div className="truncate text-xs text-muted-foreground" title={t.path ?? ""}>
             {t.ok ? [t.version, t.path].filter(Boolean).join(" · ") : t.problem}

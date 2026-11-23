@@ -12,6 +12,7 @@ use super::{node_bin, Managed, Progress};
 const PLATFORM_TOOLS_URL: &str = "https://dl.google.com/android/repository/platform-tools-latest-linux.zip";
 const JDK_MAJOR: u32 = 21;
 const APPIUM_SPEC: &str = "appium@3";
+const SCRCPY_LATEST: &str = "https://api.github.com/repos/Genymobile/scrcpy/releases/latest";
 
 type Emit<'a> = &'a (dyn Fn(Progress) + Sync);
 
@@ -22,6 +23,7 @@ pub fn install(m: &Managed, tool: &str, emit: Emit) -> Result<(), String> {
         "adb" => install_platform_tools(m, tool, emit, &step),
         "java" => install_jdk(m, tool, emit, &step),
         "appium" => install_appium(m, tool, emit, &step),
+        "scrcpy" => install_scrcpy(m, tool, emit, &step),
         other => Err(format!("Unknown tool: {other}")),
     }?;
     step("Done");
@@ -77,6 +79,49 @@ fn install_jdk(m: &Managed, tool: &str, emit: Emit, step: &dyn Fn(&str)) -> Resu
         .find(|p| p.join("bin/java").exists())
         .ok_or("The JDK archive has no bin/java")?;
     replace_dir(&top, &m.jdk())?;
+    let _ = fs::remove_dir_all(&tmp);
+    Ok(())
+}
+
+/// The static Linux build from scrcpy's latest GitHub release.
+fn install_scrcpy(m: &Managed, tool: &str, emit: Emit, step: &dyn Fn(&str)) -> Result<(), String> {
+    if !cfg!(target_arch = "x86_64") {
+        return Err("scrcpy only ships Linux builds for x86_64. Install it from your distro.".into());
+    }
+    step("Finding the latest release…");
+    let release: serde_json::Value = ureq::get(SCRCPY_LATEST)
+        .header("User-Agent", "phonedeck-setup")
+        .header("Accept", "application/vnd.github+json")
+        .call()
+        .and_then(|mut r| r.body_mut().read_to_string())
+        .map_err(|e| format!("Could not read the scrcpy release list: {e}"))
+        .and_then(|t| serde_json::from_str(&t).map_err(err))?;
+    let url = release["assets"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|a| Some((a["name"].as_str()?, a["browser_download_url"].as_str()?)))
+        .find(|(name, _)| name.contains("linux-x86_64") && name.ends_with(".tar.gz"))
+        .map(|(_, url)| url.to_string())
+        .ok_or("The latest scrcpy release has no Linux x86_64 build")?;
+
+    let tmp = fresh_tmp(m, "scrcpy")?;
+    let archive = tmp.join("scrcpy.tar.gz");
+    download(&url, &archive, tool, emit)?;
+    step("Extracting…");
+    let out = tmp.join("out");
+    let file = File::open(&archive).map_err(err)?;
+    tar::Archive::new(flate2::read::GzDecoder::new(file))
+        .unpack(&out)
+        .map_err(|e| format!("Bad scrcpy archive: {e}"))?;
+    // The archive holds one folder like `scrcpy-linux-x86_64-v3.3.1/` with `scrcpy` and `scrcpy-server`.
+    let top = fs::read_dir(&out)
+        .map_err(err)?
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .find(|p| p.join("scrcpy").is_file())
+        .ok_or("The scrcpy archive has no scrcpy binary")?;
+    replace_dir(&top, &m.root.join("scrcpy"))?;
     let _ = fs::remove_dir_all(&tmp);
     Ok(())
 }
