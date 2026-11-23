@@ -2,7 +2,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
-export type ToolId = "node" | "java" | "adb" | "appium";
+export type ToolId = "node" | "java" | "adb" | "appium" | "scrcpy";
 
 export type ToolStatus = {
   id: ToolId;
@@ -14,6 +14,8 @@ export type ToolStatus = {
   managed: boolean;
   problem: string | null;
   canInstall: boolean;
+  /** Nice to have; automation works without it. */
+  optional: boolean;
 };
 
 export type SetupStatus = {

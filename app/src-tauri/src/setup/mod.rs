@@ -5,6 +5,7 @@
 //!   tools/android-sdk/platform-tools/adb   ANDROID_HOME, SMA_ADB
 //!   tools/jdk/bin/java                     JAVA_HOME
 //!   tools/appium/node_modules/...          APPIUM_HOME (Appium + uiautomator2 driver)
+//!   tools/scrcpy/scrcpy                    screen viewer (optional)
 //!
 //! Anything not installed here falls back to the old lookups (env vars, PATH,
 //! ~/Android/Sdk, worker/.appium).
@@ -62,6 +63,9 @@ impl Managed {
     pub fn appium_home(&self) -> PathBuf {
         self.root.join("appium")
     }
+    pub fn scrcpy(&self) -> PathBuf {
+        self.root.join("scrcpy/scrcpy")
+    }
     fn has_appium(&self) -> bool {
         self.appium_home().join("node_modules/appium/package.json").exists()
     }
@@ -74,6 +78,14 @@ fn managed() -> Option<Managed> {
 /// adb installed by PhoneDeck, if any. Used by `adb::adb_path`.
 pub fn managed_adb() -> Option<PathBuf> {
     managed().map(|m| m.adb()).filter(|p| p.exists())
+}
+
+/// scrcpy to run: $SMA_SCRCPY, else the one PhoneDeck installed, else `scrcpy` on PATH.
+pub fn scrcpy_bin() -> PathBuf {
+    if let Some(p) = std::env::var_os("SMA_SCRCPY") {
+        return p.into();
+    }
+    managed().map(|m| m.scrcpy()).filter(|p| p.exists()).unwrap_or_else(|| "scrcpy".into())
 }
 
 /// Env vars for the worker, for every tool PhoneDeck installed itself.
@@ -98,7 +110,7 @@ pub fn worker_env() -> Vec<(&'static str, OsString)> {
 #[derive(Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolStatus {
-    /// "node" | "java" | "adb" | "appium"
+    /// "node" | "java" | "adb" | "appium" | "scrcpy"
     id: &'static str,
     name: &'static str,
     ok: bool,
@@ -110,6 +122,8 @@ pub struct ToolStatus {
     problem: Option<String>,
     /// PhoneDeck can install it with one click.
     can_install: bool,
+    /// Nice to have; automation works without it.
+    optional: bool,
 }
 
 #[derive(Serialize)]
@@ -122,7 +136,7 @@ pub struct SetupStatus {
 
 pub fn status(m: &Managed) -> SetupStatus {
     SetupStatus {
-        tools: vec![check_node(), check_java(m), check_adb(m), check_appium(m)],
+        tools: vec![check_node(), check_java(m), check_adb(m), check_appium(m), check_scrcpy(m)],
         tools_dir: m.root.display().to_string(),
         udev: phone::udev_status(),
     }
@@ -158,6 +172,7 @@ fn check_node() -> ToolStatus {
         managed: false,
         problem,
         can_install: false,
+        optional: false,
     }
 }
 
@@ -193,6 +208,7 @@ fn check_java(m: &Managed) -> ToolStatus {
         managed,
         problem,
         can_install: true,
+        optional: false,
     }
 }
 
@@ -210,6 +226,7 @@ fn check_adb(m: &Managed) -> ToolStatus {
         managed: adb == m.adb(),
         problem: out.is_none().then(|| "adb not found.".into()),
         can_install: cfg!(target_arch = "x86_64"),
+        optional: false,
     }
 }
 
@@ -253,6 +270,24 @@ fn check_appium(m: &Managed) -> ToolStatus {
         managed: home == m.appium_home(),
         problem,
         can_install: true,
+        optional: false,
+    }
+}
+
+fn check_scrcpy(m: &Managed) -> ToolStatus {
+    let bin = scrcpy_bin();
+    // "scrcpy 3.3.1 <https://github.com/Genymobile/scrcpy>\n..."
+    let version = run_capture(&bin, &["--version"]).and_then(|o| o.lines().next().map(str::to_string));
+    ToolStatus {
+        id: "scrcpy",
+        name: "scrcpy (view the phone screen)",
+        ok: version.is_some(),
+        problem: version.is_none().then(|| "Not installed. Only needed for “View screen”.".into()),
+        version,
+        path: which(&bin),
+        managed: bin == m.scrcpy(),
+        can_install: cfg!(target_arch = "x86_64"),
+        optional: true,
     }
 }
 
@@ -290,7 +325,7 @@ pub struct Progress {
     pub total: Option<u64>,
 }
 
-/// Installs one tool ("java" | "adb" | "appium"). Emits `setup-progress` events.
+/// Installs one tool ("java" | "adb" | "appium" | "scrcpy"). Emits `setup-progress` events.
 #[tauri::command]
 pub async fn setup_install(app: AppHandle, tool: String) -> Result<(), String> {
     let m = need_managed()?;
@@ -315,6 +350,25 @@ mod tests {
         assert_eq!(java_major("java version \"1.8.0_402\""), Some(8));
         assert_eq!(java_major("openjdk version \"17\" 2021-09-14"), Some(17));
         assert_eq!(java_major("nothing here"), None);
+    }
+
+    /// Downloads the real scrcpy release (~10 MB).
+    /// `SMA_DATA_DIRECTORY=/tmp/x cargo test real_install_scrcpy -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn real_install_scrcpy() {
+        let dir = std::env::var_os("SMA_DATA_DIRECTORY").expect("set SMA_DATA_DIRECTORY");
+        let m = Managed::new(PathBuf::from(dir).join("tools"));
+        install::install(&m, "scrcpy", &|p: Progress| {
+            if p.total.is_none() {
+                eprintln!("[scrcpy] {}", p.step)
+            }
+        })
+        .unwrap();
+        let _ = TOOLS_DIR.set(m.root.clone());
+        let t = check_scrcpy(&m);
+        eprintln!("ok={} managed={} {:?}", t.ok, t.managed, t.version);
+        assert!(t.ok && t.managed);
     }
 
     /// Runs the real installers. Downloads ~250 MB.

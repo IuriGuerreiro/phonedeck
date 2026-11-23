@@ -69,6 +69,8 @@ export const api = {
   restartWorker: () => invoke<void>("restart_worker"),
   runJob: (serial: string, job: Job) => invoke<unknown>("run_job", { serial, job }),
   stopJob: (serial: string) => invoke<void>("stop_job", { serial }),
+  /** Opens a live, view-only window of the phone's screen (scrcpy). */
+  viewPhone: (serial: string, title: string) => invoke<void>("view_phone", { serial, title }),
   listAccounts: (serial: string) => invoke<Account[]>("list_accounts", { serial }),
   deleteAccount: (id: number) => invoke<void>("delete_account", { id }),
   recentRuns: (limit = 50) => invoke<JobRun[]>("recent_runs", { limit }),

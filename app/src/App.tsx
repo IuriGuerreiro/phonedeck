@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ArrowUp, Play, RefreshCw, RotateCcw, Smartphone } from "lucide-react";
+import { ArrowUp, Monitor, Play, RefreshCw, RotateCcw, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, type Device, type Job, type JobRun, type WorkerStatus } from "@/api";
@@ -186,14 +186,24 @@ export default function App() {
                   <Play /> {busy === "open_app" ? "Opening…" : "Open app"}
                 </Button>
               </div>
-              <Button
-                variant="outline"
-                disabled={!canRun}
-                onClick={() => run({ action: "swipe_up" })}
-                className="self-start"
-              >
-                <ArrowUp /> {busy === "swipe_up" ? "Swiping…" : "Swipe up"}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" disabled={!canRun} onClick={() => run({ action: "swipe_up" })}>
+                  <ArrowUp /> {busy === "swipe_up" ? "Swiping…" : "Swipe up"}
+                </Button>
+                {/* Works while a job runs: the window is view-only. */}
+                <Button
+                  variant="outline"
+                  disabled={device?.state !== "device"}
+                  onClick={() =>
+                    device &&
+                    api
+                      .viewPhone(device.serial, `PhoneDeck · ${device.name ?? device.model ?? device.serial}`)
+                      .catch((e) => toast.error(String(e)))
+                  }
+                >
+                  <Monitor /> View screen
+                </Button>
+              </div>
               {worker.state === "ready" && !device && (
                 <p className="text-xs text-muted-foreground">Pick a phone first.</p>
               )}
