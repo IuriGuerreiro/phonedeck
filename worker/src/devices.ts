@@ -2,7 +2,7 @@
 // same phone run one at a time; different phones run in parallel.
 import { remote } from "webdriverio";
 
-type Browser = Awaited<ReturnType<typeof remote>>;
+export type Browser = Awaited<ReturnType<typeof remote>>;
 
 type Device = {
   serial: string;
@@ -19,6 +19,11 @@ export function setAppiumPort(port: number) {
   appiumPort = port;
 }
 
+/** Phones where the user asked the running job to stop. Long jobs check this. */
+const stopRequested = new Set<string>();
+export const requestStop = (serial: string) => stopRequested.add(serial);
+export const shouldStop = (serial: string) => stopRequested.has(serial);
+
 function device(serial: string): Device {
   let d = devices.get(serial);
   if (!d) {
@@ -32,6 +37,7 @@ function device(serial: string): Device {
 export function withDevice<T>(serial: string, fn: (s: Browser) => Promise<T>): Promise<T> {
   const d = device(serial);
   const run = d.queue.then(async () => {
+    stopRequested.delete(serial);
     const session = await ensureSession(d);
     try {
       return await fn(session);
@@ -60,6 +66,9 @@ async function ensureSession(d: Device): Promise<Browser> {
       "appium:newCommandTimeout": 600,
     },
   });
+  // Video apps never go idle (something is always playing), and by default
+  // UiAutomator waits up to 10s for idle before every lookup.
+  await d.session.updateSettings({ waitForIdleTimeout: 0 });
   return d.session;
 }
 

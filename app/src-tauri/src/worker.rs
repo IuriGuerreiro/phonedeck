@@ -17,8 +17,6 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
 
-/// How long one job may take, including a first-time Appium session start.
-const JOB_TIMEOUT: Duration = Duration::from_secs(180);
 
 #[derive(Clone, Serialize)]
 #[serde(tag = "state", rename_all = "camelCase")]
@@ -33,7 +31,21 @@ pub enum WorkerStatus {
     },
 }
 
-type Reply = Result<Value, String>;
+/// A failed job. `code` is set for failures the app treats specially,
+/// e.g. "needs_attention" when a person has to look at the phone.
+#[derive(Debug, Clone)]
+pub struct JobError {
+    pub message: String,
+    pub code: Option<String>,
+}
+
+impl JobError {
+    fn new(message: impl Into<String>) -> Self {
+        Self { message: message.into(), code: None }
+    }
+}
+
+type Reply = Result<Value, JobError>;
 type Pending = Arc<Mutex<HashMap<u64, oneshot::Sender<Reply>>>>;
 
 struct Running {
@@ -118,7 +130,7 @@ impl Worker {
             }
             // stdout closed: the worker is gone. Fail anything still waiting.
             for (_, tx) in lock(&pending).drain() {
-                let _ = tx.send(Err("Worker stopped".into()));
+                let _ = tx.send(Err(JobError::new("Worker stopped")));
             }
             if !matches!(*lock(&status), WorkerStatus::Failed { .. }) {
                 set_status(&app, &status, WorkerStatus::Failed { error: "Worker stopped".into() });
@@ -141,9 +153,10 @@ impl Worker {
         let _ = child.wait();
     }
 
-    pub async fn run(&self, job: Value) -> Reply {
+    /// Send a job and wait for its reply, up to `timeout`.
+    pub async fn run(&self, job: Value, timeout: Duration) -> Reply {
         if !matches!(self.status(), WorkerStatus::Ready { .. }) {
-            return Err("Automation engine is not ready yet".into());
+            return Err(JobError::new("Automation engine is not ready yet"));
         }
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         let (tx, rx) = oneshot::channel();
@@ -156,15 +169,15 @@ impl Worker {
         };
         if let Err(e) = written {
             lock(&self.pending).remove(&id);
-            return Err(format!("Could not reach worker: {e}"));
+            return Err(JobError::new(format!("Could not reach worker: {e}")));
         }
 
-        match tokio::time::timeout(JOB_TIMEOUT, rx).await {
+        match tokio::time::timeout(timeout, rx).await {
             Ok(Ok(reply)) => reply,
-            Ok(Err(_)) => Err("Worker stopped".into()),
+            Ok(Err(_)) => Err(JobError::new("Worker stopped")),
             Err(_) => {
                 lock(&self.pending).remove(&id);
-                Err(format!("Job timed out after {}s", JOB_TIMEOUT.as_secs()))
+                Err(JobError::new(format!("Job timed out after {}s", timeout.as_secs())))
             }
         }
     }
@@ -180,6 +193,9 @@ fn handle_message(app: &AppHandle, status: &Mutex<WorkerStatus>, pending: &Pendi
             let error = msg["error"].as_str().unwrap_or("Worker failed").to_string();
             set_status(app, status, WorkerStatus::Failed { error });
         }
+        Some("progress") => {
+            let _ = app.emit("job-progress", msg);
+        }
         Some(other) => eprintln!("[worker] unknown event {other}"),
         None => {
             let Some(id) = msg["id"].as_u64() else { return };
@@ -187,7 +203,10 @@ fn handle_message(app: &AppHandle, status: &Mutex<WorkerStatus>, pending: &Pendi
             let reply = if msg["ok"].as_bool() == Some(true) {
                 Ok(msg["result"].clone())
             } else {
-                Err(msg["error"].as_str().unwrap_or("Unknown error").to_string())
+                Err(JobError {
+                    message: msg["error"].as_str().unwrap_or("Unknown error").to_string(),
+                    code: msg["code"].as_str().map(str::to_string),
+                })
             };
             let _ = tx.send(reply);
         }

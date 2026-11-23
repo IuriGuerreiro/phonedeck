@@ -3,6 +3,7 @@ import { ArrowUp, Play, RefreshCw, RotateCcw, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, type Device, type Job, type JobRun, type WorkerStatus } from "@/api";
+import { AccountsCard } from "@/accounts/AccountsCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -198,6 +199,14 @@ export default function App() {
               )}
             </CardContent>
           </Card>
+
+          {device && appChoice === "tiktok" && (
+            <AccountsCard
+              serial={device.serial}
+              ready={worker.state === "ready" && device.state === "device"}
+              onJobDone={refreshRuns}
+            />
+          )}
 
           <Card>
             <CardHeader>

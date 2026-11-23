@@ -27,6 +27,18 @@ const MIGRATIONS: &[&str] = &[r#"
         finished_at TEXT
     );
     CREATE INDEX job_runs_started ON job_runs (started_at DESC);
+"#, r#"
+    CREATE TABLE accounts (
+        id             INTEGER PRIMARY KEY,
+        serial         TEXT NOT NULL,
+        platform       TEXT NOT NULL,
+        username       TEXT NOT NULL,
+        status         TEXT NOT NULL DEFAULT 'ok' CHECK (status IN ('ok', 'needs_attention')),
+        note           TEXT,
+        last_warmup_at TEXT,
+        created_at     TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE (serial, platform, username)
+    );
 "#];
 
 #[derive(Serialize)]
@@ -49,9 +61,30 @@ pub struct JobRun {
     pub finished_at: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Account {
+    pub id: i64,
+    pub serial: String,
+    pub platform: String,
+    pub username: String,
+    pub status: String,
+    pub note: Option<String>,
+    pub last_warmup_at: Option<String>,
+}
+
+/// What a finished job means for an account's row.
+pub enum AccountEvent<'a> {
+    Seen,
+    WarmedUp,
+    NeedsAttention(&'a str),
+}
+
 impl Db {
     pub fn open(path: &Path) -> rusqlite::Result<Self> {
         let mut conn = Connection::open(path)?;
+        // Wait for a lock instead of failing, e.g. while a previous instance is closing.
+        conn.busy_timeout(std::time::Duration::from_secs(15))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
         migrate(&mut conn)?;
         // Runs left 'running' by a crash or forced quit can never finish now.
@@ -73,7 +106,10 @@ impl Db {
             "INSERT INTO devices (serial, model) VALUES (?1, ?2)
              ON CONFLICT (serial) DO UPDATE SET
                model = COALESCE(excluded.model, devices.model),
-               last_seen = datetime('now')",
+               last_seen = datetime('now')
+             -- Polled every few seconds: skip the write unless something changed.
+             WHERE (excluded.model IS NOT NULL AND devices.model IS NOT excluded.model)
+                OR devices.last_seen < datetime('now', '-1 minute')",
             params![serial, model],
         )?;
         Ok(())
@@ -92,6 +128,55 @@ impl Db {
     pub fn rename_device(&self, serial: &str, name: Option<&str>) -> rusqlite::Result<()> {
         self.conn()
             .execute("UPDATE devices SET name = ?2 WHERE serial = ?1", params![serial, name])?;
+        Ok(())
+    }
+
+    pub fn upsert_account(
+        &self,
+        serial: &str,
+        platform: &str,
+        username: &str,
+        event: AccountEvent,
+    ) -> rusqlite::Result<()> {
+        let (status, note, warmed) = match event {
+            AccountEvent::Seen => ("ok", None, false),
+            AccountEvent::WarmedUp => ("ok", None, true),
+            AccountEvent::NeedsAttention(note) => ("needs_attention", Some(note), false),
+        };
+        self.conn().execute(
+            "INSERT INTO accounts (serial, platform, username, status, note, last_warmup_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, CASE WHEN ?6 THEN datetime('now') END)
+             ON CONFLICT (serial, platform, username) DO UPDATE SET
+               status = excluded.status,
+               note = excluded.note,
+               last_warmup_at = COALESCE(excluded.last_warmup_at, accounts.last_warmup_at)",
+            params![serial, platform, username, status, note, warmed],
+        )?;
+        Ok(())
+    }
+
+    pub fn accounts(&self, serial: &str) -> rusqlite::Result<Vec<Account>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare(
+            "SELECT id, serial, platform, username, status, note, last_warmup_at
+             FROM accounts WHERE serial = ?1 ORDER BY platform, username COLLATE NOCASE",
+        )?;
+        let rows = stmt.query_map([serial], |r| {
+            Ok(Account {
+                id: r.get(0)?,
+                serial: r.get(1)?,
+                platform: r.get(2)?,
+                username: r.get(3)?,
+                status: r.get(4)?,
+                note: r.get(5)?,
+                last_warmup_at: r.get(6)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    pub fn delete_account(&self, id: i64) -> rusqlite::Result<()> {
+        self.conn().execute("DELETE FROM accounts WHERE id = ?1", [id])?;
         Ok(())
     }
 

@@ -7,8 +7,10 @@ use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager, RunEvent, State};
 
-use db::{Db, JobRun};
-use worker::{Worker, WorkerStatus};
+use std::time::Duration;
+
+use db::{Account, AccountEvent, Db, JobRun};
+use worker::{JobError, Worker, WorkerStatus};
 
 type CmdResult<T> = Result<T, String>;
 
@@ -26,8 +28,11 @@ struct DeviceView {
     state: String,
 }
 
+// Commands marked `async` run off the UI thread: they shell out to adb or touch
+// SQLite, and a slow disk must never freeze the window.
+
 /// Connected phones first, then phones seen before that are unplugged now.
-#[tauri::command]
+#[tauri::command(async)]
 fn list_devices(db: State<'_, Db>) -> CmdResult<Vec<DeviceView>> {
     let connected = adb::list()?;
     for d in &connected {
@@ -54,7 +59,7 @@ fn list_devices(db: State<'_, Db>) -> CmdResult<Vec<DeviceView>> {
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn rename_device(db: State<'_, Db>, serial: String, name: String) -> CmdResult<()> {
     let name = name.trim();
     db.rename_device(&serial, (!name.is_empty()).then_some(name)).map_err(err)
@@ -73,8 +78,9 @@ async fn restart_worker(app: AppHandle) -> CmdResult<()> {
         .map_err(err)
 }
 
-/// Runs one job on one phone and records it in `job_runs`.
-/// `job` is e.g. `{ "action": "open_app", "package": "com.instagram.android" }`.
+/// Runs one job on one phone, records it in `job_runs`, and updates the
+/// account it was about (if any).
+/// `job` is e.g. `{ "action": "warmup", "platform": "tiktok", "username": "x", "minutes": 10 }`.
 #[tauri::command]
 async fn run_job(
     db: State<'_, Db>,
@@ -91,13 +97,66 @@ async fn run_job(
     let job = Value::Object(job);
 
     let run_id = db.start_run(&serial, &action, &job.to_string()).map_err(err)?;
-    let reply = worker.run(job).await;
-    db.finish_run(run_id, &reply.as_ref().map(Value::to_string).map_err(Clone::clone))
-        .map_err(err)?;
-    reply
+    let reply = worker.run(job.clone(), job_timeout(&job)).await;
+    let outcome = reply.as_ref().map(Value::to_string).map_err(|e| e.message.clone());
+    db.finish_run(run_id, &outcome).map_err(err)?;
+    record_accounts(&db, &serial, &job, &reply).map_err(err)?;
+    reply.map_err(|e| e.message)
 }
 
+/// Asks the job running on this phone to stop. Not recorded as a run.
 #[tauri::command]
+async fn stop_job(worker: State<'_, Worker>, serial: String) -> CmdResult<()> {
+    let job = serde_json::json!({ "action": "stop", "serial": serial });
+    worker.run(job, Duration::from_secs(10)).await.map(|_| ()).map_err(|e| e.message)
+}
+
+#[tauri::command(async)]
+fn list_accounts(db: State<'_, Db>, serial: String) -> CmdResult<Vec<Account>> {
+    db.accounts(&serial).map_err(err)
+}
+
+#[tauri::command(async)]
+fn delete_account(db: State<'_, Db>, id: i64) -> CmdResult<()> {
+    db.delete_account(id).map_err(err)
+}
+
+/// Warm-ups run for minutes; everything else should finish within a few.
+fn job_timeout(job: &Value) -> Duration {
+    let base = 180;
+    match job["action"].as_str() {
+        Some("warmup") => {
+            let minutes = job["minutes"].as_f64().unwrap_or(10.0).clamp(1.0, 120.0);
+            Duration::from_secs(base + (minutes * 60.0) as u64)
+        }
+        _ => Duration::from_secs(base),
+    }
+}
+
+fn record_accounts(
+    db: &Db,
+    serial: &str,
+    job: &Value,
+    reply: &Result<Value, JobError>,
+) -> rusqlite::Result<()> {
+    let Some(platform) = job["platform"].as_str() else { return Ok(()) };
+    if let (Some("list_accounts"), Ok(result)) = (job["action"].as_str(), reply) {
+        for name in result["accounts"].as_array().into_iter().flatten().filter_map(Value::as_str) {
+            db.upsert_account(serial, platform, name, AccountEvent::Seen)?;
+        }
+        return Ok(());
+    }
+    let Some(username) = job["username"].as_str() else { return Ok(()) };
+    let event = match reply {
+        Ok(_) if job["action"] == "warmup" => AccountEvent::WarmedUp,
+        Ok(_) => AccountEvent::Seen,
+        Err(e) if e.code.as_deref() == Some("needs_attention") => AccountEvent::NeedsAttention(&e.message),
+        Err(_) => return Ok(()),
+    };
+    db.upsert_account(serial, platform, username, event)
+}
+
+#[tauri::command(async)]
 fn recent_runs(db: State<'_, Db>, limit: Option<u32>) -> CmdResult<Vec<JobRun>> {
     db.recent_runs(limit.unwrap_or(50)).map_err(err)
 }
@@ -123,6 +182,9 @@ pub fn run() {
             worker_status,
             restart_worker,
             run_job,
+            stop_job,
+            list_accounts,
+            delete_account,
             recent_runs,
             setup::setup_status,
             setup::setup_install,
