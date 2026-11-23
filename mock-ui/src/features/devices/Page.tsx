@@ -40,19 +40,16 @@ function DeviceList() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold">Devices</h1>
-          <p className="text-sm text-muted-foreground">Phones connected to this PC over USB.</p>
-        </div>
+        <h1 className="text-lg font-semibold">Devices</h1>
         <Button variant="outline" size="sm" onClick={refresh}>
           <RefreshCw /> Refresh
         </Button>
       </div>
 
       {devices === null ? (
-        <p className="text-sm text-muted-foreground">Looking for phones…</p>
+        <p className="text-sm text-muted-foreground">Scanning…</p>
       ) : devices.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No phones found. Plug one in with USB debugging on.</p>
+        <p className="text-sm text-muted-foreground">No devices connected.</p>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {devices.map((d) => (
@@ -86,7 +83,7 @@ function DeviceCard({ device: d, accountCount, onChange }: { device: Device; acc
     setBusy(true);
     await devicesApi.authorize(d.serial);
     setBusy(false);
-    toast.success(`${deviceLabel(d)} is ready`);
+    toast.success(`${deviceLabel(d)} ready`);
     onChange();
   }
 
@@ -144,7 +141,7 @@ function DeviceCard({ device: d, accountCount, onChange }: { device: Device; acc
             {state.hint}
             {d.state === "unauthorized" && (
               <Button size="sm" variant="outline" disabled={busy} onClick={authorize} className="self-start">
-                <ShieldCheck /> I accepted it (mock)
+                <ShieldCheck /> Authorize
               </Button>
             )}
           </div>

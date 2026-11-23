@@ -20,26 +20,26 @@ export function SafetySection() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SettingSection title="Daily limits per account">
-        <SettingRow label="Max likes per day" description="Likes stop for the day once an account hits this.">
+      <SettingSection title="Daily limits (per account)">
+        <SettingRow label="Max likes">
           {num("maxLikesPerDay", 0, 1000)}
         </SettingRow>
-        <SettingRow label="Max follows per day" description="New accounts should stay low, around 5–15.">
+        <SettingRow label="Max follows" description="5–15 recommended for new accounts">
           {num("maxFollowsPerDay", 0, 200)}
         </SettingRow>
-        <SettingRow label="Max warm-up minutes per day" description="Warm-ups end early once an account reaches this.">
+        <SettingRow label="Max warm-up (min)">
           {num("maxMinutesPerDay", 1, 600)}
         </SettingRow>
       </SettingSection>
 
       <SettingSection title="Quiet hours">
-        <SettingRow label="Pause at night" description="Nothing runs between these times. Running jobs finish their current video, then stop.">
+        <SettingRow label="Pause overnight" description="Stop scheduling between these hours">
           <div className="flex justify-end">
             <Switch label="Quiet hours" checked={l.quietHoursOn} onChange={(v) => set("quietHoursOn", v)} />
           </div>
         </SettingRow>
         {l.quietHoursOn && (
-          <SettingRow label="From – to" description="Uses this PC's time zone. Can cross midnight.">
+          <SettingRow label="Window" description="Local time">
             <div className="flex items-center gap-1.5">
               <Input type="time" value={l.quietStart} onChange={(e) => set("quietStart", e.target.value)} />
               <span className="text-muted-foreground">–</span>
@@ -49,22 +49,22 @@ export function SafetySection() {
         )}
       </SettingSection>
 
-      <SettingSection title="Random breaks">
-        <SettingRow label="Take random breaks" description="Puts the phone down for a bit, like a real person would.">
+      <SettingSection title="Breaks">
+        <SettingRow label="Random breaks" description="Pause periodically during sessions">
           <div className="flex justify-end">
             <Switch label="Random breaks" checked={l.breaksOn} onChange={(v) => set("breaksOn", v)} />
           </div>
         </SettingRow>
         {l.breaksOn && (
           <>
-            <SettingRow label="Break every (minutes)" description="A random time in this range.">
+            <SettingRow label="Interval (min)">
               <div className="flex items-center gap-1.5">
                 {num("breakEveryMin", 1, 120)}
                 <span className="text-muted-foreground">–</span>
                 {num("breakEveryMax", 1, 120)}
               </div>
             </SettingRow>
-            <SettingRow label="Break length (minutes)" description="A random time in this range.">
+            <SettingRow label="Duration (min)">
               <div className="flex items-center gap-1.5">
                 {num("breakLengthMin", 1, 60)}
                 <span className="text-muted-foreground">–</span>

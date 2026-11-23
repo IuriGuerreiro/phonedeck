@@ -12,7 +12,7 @@ import { useSettings } from "@/settings/SettingsContext";
 
 export const ALERT_KIND: Record<AlertKind, { label: string; icon: typeof CircleAlert; color: string }> = {
   captcha: { label: "Captcha", icon: ShieldAlert, color: "text-[#d9900a]" },
-  offline: { label: "Phone offline", icon: Smartphone, color: "text-[#d03b3b]" },
+  offline: { label: "Offline", icon: Smartphone, color: "text-[#d03b3b]" },
   logged_out: { label: "Logged out", icon: UserX, color: "text-[#d03b3b]" },
   job_failed: { label: "Job failed", icon: CircleAlert, color: "text-[#d03b3b]" },
   limit_reached: { label: "Limit reached", icon: Ban, color: "text-[#d9900a]" },
@@ -35,13 +35,10 @@ export default function AlertsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold">Alerts</h1>
-          <p className="text-sm text-muted-foreground">Things that need you. Fix them on the phone, then mark them solved.</p>
-        </div>
+        <h1 className="text-lg font-semibold">Alerts</h1>
         {tab === "open" && open.length > 0 && (
           <Button variant="outline" size="sm" onClick={alertsApi.solveAll}>
-            <CheckCheck /> Mark all solved
+            <CheckCheck /> Resolve all
           </Button>
         )}
       </div>
@@ -51,11 +48,11 @@ export default function AlertsPage() {
           Open ({open.length})
         </Button>
         <Button size="sm" variant={tab === "solved" ? "secondary" : "ghost"} onClick={() => setTab("solved")}>
-          Solved ({solved.length})
+          Resolved ({solved.length})
         </Button>
         <span className="mx-2 h-4 w-px bg-border" />
         <Button size="sm" variant={kind === null ? "secondary" : "ghost"} onClick={() => setKind(null)}>
-          All types
+          All
         </Button>
         {(Object.keys(ALERT_KIND) as AlertKind[]).map((k) => (
           <Button key={k} size="sm" variant={kind === k ? "secondary" : "ghost"} onClick={() => setKind(k)}>
@@ -68,7 +65,7 @@ export default function AlertsPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
             <CheckCheck className="size-8 text-[#0ca30c]" />
-            {tab === "open" ? "All clear. Nothing needs you right now." : "Nothing solved yet."}
+            {tab === "open" ? "No open alerts" : "No resolved alerts"}
           </CardContent>
         </Card>
       ) : (
@@ -96,15 +93,15 @@ function AlertRow({ alert: a, onSettings }: { alert: Alert; onSettings: () => vo
           <p className="text-sm text-muted-foreground">{a.detail}</p>
           <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
             <span>{timeAgo(a.at)}</span>
-            {a.solvedAt && <span>Solved {timeAgo(a.solvedAt)}</span>}
+            {a.solvedAt && <span>Resolved {timeAgo(a.solvedAt)}</span>}
             {a.serial && (
               <a href={`#devices/${a.serial}`} className="underline-offset-4 hover:underline">
-                Open phone
+                Device
               </a>
             )}
             {a.accountId && (
               <a href={`#accounts/${a.accountId}`} className="underline-offset-4 hover:underline">
-                Open account
+                Account
               </a>
             )}
             {a.kind === "limit_reached" && (
@@ -120,7 +117,7 @@ function AlertRow({ alert: a, onSettings }: { alert: Alert; onSettings: () => vo
           </Button>
         ) : (
           <Button size="sm" variant="outline" onClick={() => alertsApi.solve(a.id)}>
-            <CheckCheck /> Solved
+            <CheckCheck /> Resolve
           </Button>
         )}
       </CardContent>

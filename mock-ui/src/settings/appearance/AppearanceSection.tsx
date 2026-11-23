@@ -13,8 +13,8 @@ const OPTIONS: { id: ThemeChoice; label: string; icon: typeof Sun }[] = [
 export function AppearanceSection() {
   const choice = useThemeChoice();
   return (
-    <SettingSection title="Theme">
-      <SettingRow label="Color theme" description="System follows your computer's light or dark setting.">
+    <SettingSection title="Appearance">
+      <SettingRow label="Theme">
         <ThemePicker value={choice} onChange={setTheme} />
       </SettingRow>
     </SettingSection>

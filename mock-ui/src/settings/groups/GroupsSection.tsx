@@ -21,22 +21,21 @@ export function GroupsSection() {
   return (
     <div className="flex flex-col gap-8">
       <SettingSection title="Groups">
-        {groups.length === 0 && <p className="px-4 py-3.5 text-sm text-muted-foreground">No groups yet.</p>}
+        {groups.length === 0 && <p className="px-4 py-3.5 text-sm text-muted-foreground">No groups yet</p>}
         {groups.map((g) => (
           <GroupRow key={`${g.id}:${g.keywords.join(",")}`} group={g} />
         ))}
       </SettingSection>
 
       <form onSubmit={add} className="flex gap-2">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="New group name, e.g. Travel" />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="New group name" />
         <Button type="submit" disabled={!name.trim()}>
-          <Plus /> Add group
+          <Plus /> Add
         </Button>
       </form>
 
       <p className="text-xs text-muted-foreground">
-        Accounts in a group use its keywords when warming up. An account in several groups uses all of them. Accounts
-        with no group keywords use the global Warm-up settings.
+        Group keywords override global warm-up settings.
       </p>
     </div>
   );
@@ -67,7 +66,7 @@ function GroupRow({ group: g }: { group: Group }) {
         value={keywords}
         onChange={(e) => setKeywords(e.target.value)}
         onBlur={saveKeywords}
-        placeholder="Keywords, comma-separated"
+        placeholder="Keywords (comma-separated)"
         aria-label={`${g.name} keywords`}
       />
       <Button variant="ghost" size="icon-sm" title="Delete group" onClick={() => groupsApi.remove(g.id)}>

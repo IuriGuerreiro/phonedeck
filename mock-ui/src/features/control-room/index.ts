@@ -7,7 +7,7 @@ export const feature: Feature = {
   id: "control-room",
   label: "Control room",
   icon: LayoutGrid,
-  group: "Phones",
+  group: "Manage",
   status: "draft",
   page: lazy(() => import("./Page")),
   wide: true,

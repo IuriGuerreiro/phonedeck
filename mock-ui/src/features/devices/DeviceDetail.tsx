@@ -28,7 +28,7 @@ export function DeviceDetail({ serial }: { serial: string }) {
 
   const back = (
     <Button variant="ghost" size="sm" className="self-start" render={<a href="#devices" />}>
-      <ArrowLeft /> All devices
+      <ArrowLeft /> Devices
     </Button>
   );
 
@@ -37,7 +37,7 @@ export function DeviceDetail({ serial }: { serial: string }) {
     return (
       <div className="flex flex-col gap-3">
         {back}
-        <p className="text-sm text-muted-foreground">No phone with serial {serial}.</p>
+        <p className="text-sm text-muted-foreground">Device {serial} not found.</p>
       </div>
     );
 
@@ -89,7 +89,7 @@ export function DeviceDetail({ serial }: { serial: string }) {
                     "Battery",
                     <span className="flex items-center gap-1">
                       {details.charging ? <BatteryCharging className="size-4" /> : <BatteryMedium className="size-4" />}
-                      {device.battery}%{details.charging && " (charging)"}
+                      {device.battery}%{details.charging && " · Charging"}
                     </span>,
                   ],
                 ]}
@@ -99,15 +99,15 @@ export function DeviceDetail({ serial }: { serial: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Connection & setup</CardTitle>
+              <CardTitle>Connection</CardTitle>
             </CardHeader>
             <CardContent>
               <Facts
                 rows={[
-                  ["Connected by", details.connection],
-                  ["IP address", details.ipAddress ?? "Unknown"],
+                  ["Connection", details.connection],
+                  ["IP address", details.ipAddress ?? "—"],
                   ["Connected", timeAgo(details.connectedSince)],
-                  ["Helper apps", <YesNo ok={details.helpersInstalled} yes="Installed" no="Not installed" />],
+                  ["Helpers", <YesNo ok={details.helpersInstalled} yes="Installed" no="Missing" />],
                   ["TikTok", <YesNo ok={!!details.tiktokVersion} yes={`v${details.tiktokVersion}`} no="Not installed" />],
                 ]}
               />
@@ -118,11 +118,11 @@ export function DeviceDetail({ serial }: { serial: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Accounts on this phone ({accounts.length})</CardTitle>
+          <CardTitle>Accounts ({accounts.length})</CardTitle>
         </CardHeader>
         <CardContent>
           {accounts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No accounts found on this phone yet.</p>
+            <p className="text-sm text-muted-foreground">No accounts linked.</p>
           ) : (
             <ul className="flex flex-col divide-y">
               {accounts.map((a) => (
@@ -131,7 +131,7 @@ export function DeviceDetail({ serial }: { serial: string }) {
                   <span className="flex items-center gap-3 text-xs text-muted-foreground">
                     {a.lastWarmupAt ? `Warmed ${timeAgo(a.lastWarmupAt)}` : "Never warmed"}
                     <Badge variant={a.status === "ok" ? "secondary" : "destructive"}>
-                      {a.status === "ok" ? "OK" : "Needs attention"}
+                      {a.status === "ok" ? "OK" : "Attention"}
                     </Badge>
                   </span>
                 </li>
@@ -143,11 +143,11 @@ export function DeviceDetail({ serial }: { serial: string }) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent activity</CardTitle>
+          <CardTitle>Activity</CardTitle>
         </CardHeader>
         <CardContent>
           {!details?.activity.length ? (
-            <p className="text-sm text-muted-foreground">Nothing has run on this phone yet.</p>
+            <p className="text-sm text-muted-foreground">No recent activity.</p>
           ) : (
             <ul className="flex flex-col divide-y">
               {details.activity.map((r) => (

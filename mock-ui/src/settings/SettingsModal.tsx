@@ -76,7 +76,7 @@ export function SettingsModal({ section, onSection, onClose }: Props) {
               ))}
             </nav>
           ))}
-          {groups.length === 0 && <p className="px-2 text-xs text-muted-foreground">No matches.</p>}
+          {groups.length === 0 && <p className="px-2 text-xs text-muted-foreground">No results</p>}
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
@@ -92,13 +92,13 @@ export function SettingsModal({ section, onSection, onClose }: Props) {
                 size="sm"
                 onClick={() => {
                   active.restoreDefaults!();
-                  toast.success(`${active.label} settings restored`);
+                  toast.success(`${active.label} reset to defaults`);
                 }}
               >
-                <RotateCcw /> Restore defaults
+                <RotateCcw /> Reset defaults
               </Button>
             )}
-            <Button variant="ghost" size="icon-sm" onClick={onClose} title="Close (Esc)">
+            <Button variant="ghost" size="icon-sm" onClick={onClose} title="Close">
               <X />
             </Button>
           </header>

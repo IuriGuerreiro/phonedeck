@@ -5,7 +5,7 @@ import type { Feature } from "@/features/types";
 
 export const feature: Feature = {
   id: "video-analytics",
-  label: "Video analytics",
+  label: "Videos",
   icon: Clapperboard,
   group: "Analytics",
   status: "draft",

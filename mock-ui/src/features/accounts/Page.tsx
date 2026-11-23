@@ -103,9 +103,9 @@ function AccountList() {
 
   async function findAccounts() {
     const serials = deviceFilter ? [deviceFilter] : devices.map((d) => d.serial);
-    await run("Finding logged-in accounts", async () => {
+    await run("Syncing accounts", async () => {
       const n = await accountsApi.findLoggedIn(serials);
-      toast.success(n ? `Scanned ${n} phone${n > 1 ? "s" : ""}` : "No ready phones to scan");
+      toast.success(n ? `Synced ${n} device${n > 1 ? "s" : ""}` : "No ready devices");
     });
   }
 
@@ -117,7 +117,7 @@ function AccountList() {
         <CardTitle>Accounts</CardTitle>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" disabled={!idle} onClick={findAccounts}>
-            <Search /> Find logged-in accounts
+            <Search /> Sync accounts
           </Button>
           <Button variant="ghost" size="sm" onClick={() => openSettings("warmup")}>
             <Settings2 /> Warm-up settings
@@ -128,7 +128,7 @@ function AccountList() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap gap-1">
             <FilterChip active={deviceFilter === null} onClick={() => setDeviceFilter(null)}>
-              All phones ({accounts.length})
+              All ({accounts.length})
             </FilterChip>
             {devices.map((d) => (
               <FilterChip key={d.serial} active={deviceFilter === d.serial} onClick={() => setDeviceFilter(d.serial)}>
@@ -143,7 +143,7 @@ function AccountList() {
         <div className="flex flex-wrap items-center gap-1">
           <span className="mr-1 text-xs text-muted-foreground">Group</span>
           <FilterChip active={groupFilter === null} onClick={() => setGroupFilter(null)}>
-            Any
+            All
           </FilterChip>
           {groups.map((g) => (
             <FilterChip key={g.id} active={groupFilter === g.id} onClick={() => setGroupFilter(g.id)}>
@@ -152,10 +152,13 @@ function AccountList() {
           ))}
         </div>
         <p className="text-xs text-muted-foreground">
-          {activeGroup?.keywords.length ? `${activeGroup.name} keywords: ${activeGroup.keywords.join(", ")}. ` : ""}
-          Warm-up: {warmup.minutes} min per account, {warmup.watchMinSec}–{warmup.watchMaxSec}s per video,{" "}
-          {Math.round(warmup.likeChance * 100)}% likes, {Math.round(warmup.followChance * 100)}% follows,{" "}
-          {warmup.keywords.length ? `keywords: ${warmup.keywords.join(", ")}` : "For You feed"}.
+          {warmup.minutes}m / account · {warmup.watchMinSec}–{warmup.watchMaxSec}s watch ·{" "}
+          {Math.round(warmup.likeChance * 100)}% like · {Math.round(warmup.followChance * 100)}% follow ·{" "}
+          {activeGroup?.keywords.length
+            ? activeGroup.keywords.join(", ")
+            : warmup.keywords.length
+              ? warmup.keywords.join(", ")
+              : "For You"}
         </p>
 
         {running && (
@@ -172,14 +175,14 @@ function AccountList() {
 
         {visible.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No accounts yet. Log in on the phone, then use “Find logged-in accounts”.
+            No accounts yet. Sign in on a device, then sync.
           </p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Account</TableHead>
-                <TableHead>Phone</TableHead>
+                <TableHead>Device</TableHead>
                 <TableHead>Groups</TableHead>
                 <TableHead>Health</TableHead>
                 <TableHead>Status</TableHead>
@@ -200,7 +203,7 @@ function AccountList() {
                     </TableCell>
                     <TableCell className="text-muted-foreground">
                       {d ? deviceLabel(d) : a.serial}
-                      {d && d.state !== "device" && <span className="ml-1 text-xs">(not ready)</span>}
+                      {d && d.state !== "device" && <span className="ml-1 text-xs">(offline)</span>}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -219,7 +222,7 @@ function AccountList() {
                         <Badge variant="secondary">OK</Badge>
                       ) : (
                         <div className="flex flex-col gap-1">
-                          <Badge variant="destructive">Needs attention</Badge>
+                          <Badge variant="destructive">Attention</Badge>
                           <span className="line-clamp-2 text-xs text-muted-foreground" title={a.note ?? ""}>
                             {a.note}
                           </span>
@@ -251,7 +254,7 @@ function AccountList() {
                           variant="ghost"
                           size="icon-sm"
                           disabled={!!running}
-                          title="Remove from list (does not log out)"
+                          title="Remove account"
                           onClick={() => accountsApi.remove(a.id).then(refresh)}
                         >
                           <Trash2 />

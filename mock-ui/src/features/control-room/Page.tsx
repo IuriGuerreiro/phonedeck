@@ -9,7 +9,7 @@ import { DEVICE_STATE, deviceLabel, devicesApi, getLiveTask, type Device, type L
 import { LiveScreen, type ScreenSize } from "../devices/ScreenMirror";
 
 const TASK_TEXT = (t: LiveTask) =>
-  t.kind === "warmup" ? `Warming up @${t.account}` : t.kind === "idle" ? "Idle" : "No screen";
+  t.kind === "warmup" ? `Warming up @${t.account}` : t.kind === "idle" ? "Idle" : "Unavailable";
 
 export default function ControlRoomPage() {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -28,7 +28,7 @@ export default function ControlRoomPage() {
         <div>
           <h1 className="text-lg font-semibold">Control room</h1>
           <p className="text-sm text-muted-foreground">
-            {devices.length} phones · {busy} working · {devices.length - busy} idle or offline
+            {devices.length} devices · {busy} active
           </p>
         </div>
         <div className="flex items-center gap-1">
@@ -39,7 +39,7 @@ export default function ControlRoomPage() {
             Large
           </Button>
           <Button size="sm" variant="outline" onClick={() => setPaused(!paused)}>
-            {paused ? <Play /> : <Pause />} {paused ? "Resume all" : "Pause all views"}
+            {paused ? <Play /> : <Pause />} {paused ? "Resume all" : "Pause all"}
           </Button>
         </div>
       </div>
@@ -61,7 +61,7 @@ export default function ControlRoomPage() {
                     {task.kind === "warmup" && !paused && <span className="size-1.5 animate-pulse rounded-full bg-red-500" />}
                     {TASK_TEXT(task)}
                   </span>
-                  <Button size="icon-xs" variant="ghost" title="Open phone" render={<a href={`#devices/${d.serial}`} />}>
+                  <Button size="icon-xs" variant="ghost" title="Device details" render={<a href={`#devices/${d.serial}`} />}>
                     <ChevronRight />
                   </Button>
                 </div>

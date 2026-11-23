@@ -67,19 +67,19 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile icon={Smartphone} label="Phones online" value={`${online} / ${devices.length}`} href="#control-room" />
-        <Tile icon={Flame} label="Accounts warmed today" value={`${warmedToday} / ${accounts.length}`} href="#accounts" />
+        <Tile icon={Smartphone} label="Devices online" value={`${online} / ${devices.length}`} href="#control-room" />
+        <Tile icon={Flame} label="Warmed today" value={`${warmedToday} / ${accounts.length}`} href="#accounts" />
         <Tile
           icon={Bell}
-          label="Open alerts"
+          label="Alerts"
           value={String(openAlerts.length)}
-          sub={`${errorsToday} problem${errorsToday === 1 ? "" : "s"} today`}
+          sub={errorsToday ? `${errorsToday} today` : undefined}
           href="#alerts"
           warn={openAlerts.length > 0}
         />
         <Tile
           icon={CalendarClock}
-          label="Next scheduled run"
+          label="Next run"
           value={next ? next.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
           sub={next ? untilText(next.at, now) : undefined}
         />
@@ -88,8 +88,8 @@ export default function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Warm-up minutes, last 7 days</CardTitle>
-            <CardDescription>All accounts together.</CardDescription>
+            <CardTitle>Warm-up activity</CardTitle>
+            <CardDescription>Last 7 days</CardDescription>
           </CardHeader>
           <CardContent>
             {week.length ? <BarChart unit="min" data={week} /> : <p className="text-sm text-muted-foreground">Loading…</p>}
@@ -98,8 +98,7 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Coming up</CardTitle>
-            <CardDescription>Example schedule. The scheduler is not built yet.</CardDescription>
+            <CardTitle>Upcoming</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             {runs.map((r) => (
@@ -121,12 +120,12 @@ export default function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Needs you</CardTitle>
+            <CardTitle>Open alerts</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {openAlerts.length === 0 ? (
               <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                <CheckCheck className="size-4 text-[#0ca30c]" /> All clear.
+                <CheckCheck className="size-4 text-[#0ca30c]" /> No open alerts
               </p>
             ) : (
               openAlerts.slice(0, 4).map((a) => {
@@ -147,12 +146,12 @@ export default function DashboardPage() {
           <CardHeader>
             <CardTitle>Account health</CardTitle>
             <CardDescription>
-              {accounts.length - needCare.length} of {accounts.length} accounts are healthy.
+              {accounts.length - needCare.length}/{accounts.length} healthy
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-1.5">
             {needCare.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Every account looks good.</p>
+              <p className="text-sm text-muted-foreground">All accounts healthy</p>
             ) : (
               needCare.map(({ a, h }) => (
                 <a key={a.id} href={`#accounts/${a.id}`} className="flex items-center justify-between gap-2 rounded-md p-1 text-sm hover:bg-muted">
@@ -165,13 +164,10 @@ export default function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-2">
-            <div className="flex flex-col gap-1">
-              <CardTitle className="flex items-center gap-2">
-                <ShieldCheck className="size-4" /> Safety
-              </CardTitle>
-              <CardDescription>Per account, per day.</CardDescription>
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle className="flex items-center gap-2">
+              <ShieldCheck className="size-4" /> Safety
+            </CardTitle>
             <Button variant="ghost" size="sm" onClick={() => openSettings("safety")}>
               Edit
             </Button>
@@ -179,16 +175,16 @@ export default function DashboardPage() {
           <CardContent className="flex flex-col gap-1.5 text-sm">
             {quiet && (
               <div className="mb-1 flex items-center gap-2 rounded-md border bg-muted/50 p-2 text-xs">
-                <Moon className="size-4" /> Quiet hours now. Nothing runs until {safety.quietEnd}.
+                <Moon className="size-4" /> Quiet hours active until {safety.quietEnd}
               </div>
             )}
-            <Row k="Likes" v={`max ${safety.maxLikesPerDay}`} />
-            <Row k="Follows" v={`max ${safety.maxFollowsPerDay}`} />
-            <Row k="Warm-up" v={`max ${safety.maxMinutesPerDay} min`} />
+            <Row k="Likes" v={`${safety.maxLikesPerDay}/day`} />
+            <Row k="Follows" v={`${safety.maxFollowsPerDay}/day`} />
+            <Row k="Warm-up" v={`${safety.maxMinutesPerDay}m/day`} />
             <Row k="Quiet hours" v={safety.quietHoursOn ? `${safety.quietStart}–${safety.quietEnd}` : "Off"} />
             <Row
               k="Breaks"
-              v={safety.breaksOn ? `every ${safety.breakEveryMin}–${safety.breakEveryMax} min` : "Off"}
+              v={safety.breaksOn ? `Every ${safety.breakEveryMin}–${safety.breakEveryMax}m` : "Off"}
             />
           </CardContent>
         </Card>

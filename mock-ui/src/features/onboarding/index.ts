@@ -6,7 +6,7 @@ import { reset } from "./mock";
 
 export const feature: Feature = {
   id: "onboarding",
-  label: "Onboarding",
+  label: "Setup",
   icon: Rocket,
   group: "Getting started",
   status: "draft",

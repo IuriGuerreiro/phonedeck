@@ -41,7 +41,7 @@ export function AccountDetail({ id }: { id: number }) {
 
   const back = (
     <Button variant="ghost" size="sm" className="self-start" render={<a href="#accounts" />}>
-      <ArrowLeft /> All accounts
+      <ArrowLeft /> Accounts
     </Button>
   );
 
@@ -102,7 +102,6 @@ export function AccountDetail({ id }: { id: number }) {
         <Card>
           <CardHeader>
             <CardTitle>Health</CardTitle>
-            <CardDescription>Starts at 100. Problems take points off.</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
             <div className="flex items-baseline gap-2">
@@ -110,7 +109,7 @@ export function AccountDetail({ id }: { id: number }) {
               <span className="text-sm text-muted-foreground">/ 100</span>
             </div>
             {health.reasons.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No problems found.</p>
+              <p className="text-sm text-muted-foreground">No issues</p>
             ) : (
               <ul className="flex flex-col gap-1 text-sm">
                 {health.reasons.map((r) => (
@@ -128,17 +127,12 @@ export function AccountDetail({ id }: { id: number }) {
         </Card>
 
         <Card className="md:col-span-2">
-          <CardHeader className="flex flex-row items-start justify-between gap-2">
-            <div className="flex flex-col gap-1">
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle className="flex items-center gap-2">
               <Users className="size-4" /> Groups
             </CardTitle>
-            <CardDescription>
-              Groups set the warm-up keywords. Click to add or remove.
-            </CardDescription>
-            </div>
             <Button variant="ghost" size="sm" onClick={() => openSettings("groups")}>
-              <Settings2 /> Manage groups
+              <Settings2 /> Manage
             </Button>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -153,10 +147,10 @@ export function AccountDetail({ id }: { id: number }) {
               })}
             </div>
             <p className="text-xs text-muted-foreground">
-              Warm-up keywords:{" "}
+              Keywords:{" "}
               {(() => {
                 const kws = [...new Set(groups.filter((g) => account.groups.includes(g.id)).flatMap((g) => g.keywords))];
-                return kws.length ? kws.join(", ") : "none from groups, so the global warm-up settings are used";
+                return kws.length ? kws.join(", ") : "Global default";
               })()}
             </p>
           </CardContent>
@@ -167,11 +161,11 @@ export function AccountDetail({ id }: { id: number }) {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Flame className="size-4" /> Warm-up minutes per day
+              <Flame className="size-4" /> Warm-up
             </CardTitle>
             <CardDescription>
-              Last 14 days · {totalMinutes} min total · warmed {daysWarmed} of 14 days
-              {account.lastWarmupAt && ` · last ${timeAgo(account.lastWarmupAt)}`}
+              Last 14d · {totalMinutes}m total · {daysWarmed}/14 days
+              {account.lastWarmupAt && ` · Last ${timeAgo(account.lastWarmupAt)}`}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -187,7 +181,7 @@ export function AccountDetail({ id }: { id: number }) {
           <CardHeader>
             <CardTitle>Followers</CardTitle>
             <CardDescription>
-              Last 30 days ·{" "}
+              Last 30d ·{" "}
               <span className={cn(gained > 0 && "text-foreground")}>
                 {gained >= 0 ? "+" : ""}
                 {gained.toLocaleString()}
@@ -207,7 +201,6 @@ export function AccountDetail({ id }: { id: number }) {
       <Card>
         <CardHeader>
           <CardTitle>Notes</CardTitle>
-          <CardDescription>Saved when you click away.</CardDescription>
         </CardHeader>
         <CardContent>
           <textarea
@@ -215,7 +208,7 @@ export function AccountDetail({ id }: { id: number }) {
             onChange={(e) => setNotes(e.target.value)}
             onBlur={saveNotes}
             rows={4}
-            placeholder="Anything to remember about this account…"
+            placeholder="Add a note…"
             className="w-full resize-y rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
           />
         </CardContent>

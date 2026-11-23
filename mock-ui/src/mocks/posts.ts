@@ -53,7 +53,7 @@ const seed = (): Post[] => [
   { id: 3, accountId: 2, video: "sunday-prep.mp4", durationSec: 55, caption: "Meal prep Sunday: 5 lunches for $20", hashtags: ["mealprep", "budget"], status: "posted", at: day(-6), cover: COVERS[2] },
   { id: 4, accountId: 4, video: "one-pan-pasta.mp4", durationSec: 33, caption: "One pan pasta, 15 minutes", hashtags: ["pasta", "easyrecipes"], status: "posted", at: day(-4), cover: COVERS[4] },
   { id: 5, accountId: 1, video: "squat-mistakes.mp4", durationSec: 22, caption: "Stop doing squats like this ❌", hashtags: ["squat", "gymtips"], status: "posted", at: day(-2), cover: COVERS[3] },
-  { id: 6, accountId: 3, video: "desk-stretch.mp4", durationSec: 37, caption: "Easy mobility routine for desk workers", hashtags: ["stretching", "mobility"], status: "failed", at: day(-1), error: "Captcha shown during upload.", cover: COVERS[5] },
+  { id: 6, accountId: 3, video: "desk-stretch.mp4", durationSec: 37, caption: "Easy mobility routine for desk workers", hashtags: ["stretching", "mobility"], status: "failed", at: day(-1), error: "Captcha during upload", cover: COVERS[5] },
   { id: 7, accountId: 2, video: "chicken-bowls.mp4", durationSec: 46, caption: "Chicken rice bowls x5", hashtags: ["mealprep", "highprotein"], status: "scheduled", at: day(0, 20), cover: COVERS[2] },
   { id: 8, accountId: 1, video: "leg-day-finisher.mp4", durationSec: 30, caption: "Leg day finisher you'll hate", hashtags: ["legday", "gym"], status: "scheduled", at: day(1), cover: COVERS[0] },
   { id: 9, accountId: 4, video: "garlic-bread.mp4", durationSec: 25, caption: "Best garlic bread ever?", hashtags: ["garlicbread", "cooking"], status: "scheduled", at: day(2, 12), cover: COVERS[4] },

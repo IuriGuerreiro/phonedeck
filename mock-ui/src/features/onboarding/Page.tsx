@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { cn } from "@/lib/utils";
 import { onboardingApi, PHONE_STEPS, type Tool } from "./mock";
 
-const STEPS = ["Install tools", "Connect a phone", "Prepare the phone", "Done"] as const;
+const STEPS = ["Install tools", "Connect device", "Install helpers", "Done"] as const;
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
@@ -27,8 +27,8 @@ export default function OnboardingPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold">Welcome to PhoneDeck</h1>
-        <p className="text-sm text-muted-foreground">A few things to set up before you can automate your phones.</p>
+        <h1 className="text-lg font-semibold">Setup</h1>
+        <p className="text-sm text-muted-foreground">Install dependencies and connect your first device.</p>
       </div>
 
       <ol className="flex flex-wrap gap-2">
@@ -86,12 +86,12 @@ function ToolsStep({ tools, onTools }: { tools: Tool[]; onTools: (t: Tool[]) => 
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <div>
-          <CardTitle>Tools on this PC</CardTitle>
-          <CardDescription>PhoneDeck installs these for you into its own folder.</CardDescription>
+          <CardTitle>Dependencies</CardTitle>
+          <CardDescription>Installed locally in PhoneDeck's app folder.</CardDescription>
         </div>
         {missing.length > 0 && (
           <Button disabled={!!installing} onClick={() => install(missing)}>
-            <Download /> Install all missing
+            <Download /> Install all
           </Button>
         )}
       </CardHeader>
@@ -112,7 +112,7 @@ function ToolsStep({ tools, onTools }: { tools: Tool[]; onTools: (t: Tool[]) => 
                 {t.optional && <Badge variant="outline">Optional</Badge>}
               </div>
               <div className="text-xs text-muted-foreground">
-                {installing?.id === t.id ? `Installing… ${installing.pct}%` : t.ok ? `Version ${t.version}` : t.why}
+                {installing?.id === t.id ? `Installing… ${installing.pct}%` : t.ok ? `v${t.version}` : t.why}
               </div>
             </div>
             {!t.ok && (
@@ -138,15 +138,15 @@ function PhoneStep(props: {
     const p = await onboardingApi.findPhone();
     setChecking(false);
     props.onPhone(p);
-    if (!p) toast.error("No phone found yet. Check the steps and try again.");
+    if (!p) toast.error("No device detected. Check USB debugging and retry.");
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{props.phone ? `Found ${props.phone.model}` : "Connect your phone"}</CardTitle>
+        <CardTitle>{props.phone ? `${props.phone.model} connected` : "Connect a device"}</CardTitle>
         <CardDescription>
-          {props.phone ? `Android ${props.phone.android}. You can add more phones later.` : "Do these on the phone, then check."}
+          {props.phone ? `Android ${props.phone.android}` : "Follow these steps on your device."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -169,7 +169,7 @@ function PhoneStep(props: {
         </ol>
         {!props.phone && (
           <Button onClick={check} disabled={checking} className="self-start">
-            {checking ? <Loader2 className="animate-spin" /> : <Search />} Check for phone
+            {checking ? <Loader2 className="animate-spin" /> : <Search />} Detect device
           </Button>
         )}
       </CardContent>
@@ -190,19 +190,19 @@ function HelpersStep(props: { phone: { model: string } | null; done: boolean; on
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Prepare {props.phone?.model ?? "the phone"}</CardTitle>
+        <CardTitle>Install helpers</CardTitle>
         <CardDescription>
-          Installs two small Appium helper apps on the phone so PhoneDeck can control it.
+          Installs Appium helper APKs on {props.phone?.model ?? "your device"}.
         </CardDescription>
       </CardHeader>
       <CardContent>
         {props.done ? (
           <div className="flex items-center gap-2 text-sm">
-            <CheckCircle2 className="size-4 text-primary" /> Helper apps installed.
+            <CheckCircle2 className="size-4 text-primary" /> Helpers installed
           </div>
         ) : (
           <Button onClick={install} disabled={busy}>
-            {busy ? <Loader2 className="animate-spin" /> : <Download />} Install helper apps
+            {busy ? <Loader2 className="animate-spin" /> : <Download />} Install helpers
           </Button>
         )}
       </CardContent>
@@ -215,15 +215,15 @@ function DoneStep() {
     <Card>
       <CardContent className="flex flex-col items-center gap-3 py-10 text-center">
         <PartyPopper className="size-10 text-primary" />
-        <div className="text-lg font-semibold">You're all set</div>
+        <div className="text-lg font-semibold">Ready to go</div>
         <p className="max-w-sm text-sm text-muted-foreground">
-          Log in to TikTok on the phone, then find the accounts so you can warm them up.
+          Sign in to TikTok on the device, then sync accounts.
         </p>
         <div className="flex gap-2">
           <Button variant="outline" render={<a href="#devices" />}>
-            See devices
+            Devices
           </Button>
-          <Button render={<a href="#accounts" />}>Go to accounts</Button>
+          <Button render={<a href="#accounts" />}>Accounts</Button>
         </div>
       </CardContent>
     </Card>

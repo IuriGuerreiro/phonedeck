@@ -16,8 +16,8 @@ export type Device = {
 
 export const DEVICE_STATE: Record<DeviceState, { label: string; hint?: string }> = {
   device: { label: "Ready" },
-  unauthorized: { label: "Not allowed", hint: "Unlock the phone and accept the USB debugging prompt." },
-  offline: { label: "Offline", hint: "Reconnect the USB cable." },
+  unauthorized: { label: "Unauthorized", hint: "Accept the USB debugging prompt on the device." },
+  offline: { label: "Offline", hint: "Reconnect USB cable." },
 };
 
 const seed = (): Device[] => [
@@ -85,9 +85,9 @@ const DETAILS: Record<string, DeviceDetails> = {
     connectedSince: minsAgo(260),
     activity: [
       { at: minsAgo(12), action: "Warm-up @fit.with.ana", result: "ok" },
-      { at: minsAgo(25), action: "Switch to @fit.with.ana", result: "ok" },
-      { at: minsAgo(40), action: "Warm-up @daily.stretch", result: "error", note: "Captcha shown" },
-      { at: minsAgo(180), action: "Find logged-in accounts", result: "ok" },
+      { at: minsAgo(25), action: "Switched to @fit.with.ana", result: "ok" },
+      { at: minsAgo(40), action: "Warm-up @daily.stretch", result: "error", note: "Captcha" },
+      { at: minsAgo(180), action: "Synced accounts", result: "ok" },
     ],
   },
   "1A2B3C4D5E": {
@@ -104,7 +104,7 @@ const DETAILS: Record<string, DeviceDetails> = {
     connectedSince: minsAgo(1500),
     activity: [
       { at: minsAgo(300), action: "Warm-up @home.cooking.hq", result: "ok" },
-      { at: minsAgo(420), action: "Open TikTok", result: "ok" },
+      { at: minsAgo(420), action: "Opened TikTok", result: "ok" },
     ],
   },
   ZY22H7KLMN: {
@@ -137,8 +137,8 @@ export type LiveTask =
 const LIVE: Record<string, LiveTask> = {
   R58N12ABCDE: { kind: "warmup", account: "fit.with.ana", keywords: ["gym workout", "meal prep"] },
   "1A2B3C4D5E": { kind: "idle" },
-  ZY22H7KLMN: { kind: "no_screen", reason: "Not allowed yet. Accept the USB debugging prompt on the phone." },
+  ZY22H7KLMN: { kind: "no_screen", reason: "Accept USB debugging on device" },
 };
 
 export const getLiveTask = (serial: string): LiveTask =>
-  LIVE[serial] ?? { kind: "no_screen", reason: "Phone not connected." };
+  LIVE[serial] ?? { kind: "no_screen", reason: "Device offline" };

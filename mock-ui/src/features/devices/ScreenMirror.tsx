@@ -67,32 +67,32 @@ export function ScreenMirror({ device, task }: { device: Device; task: LiveTask 
     <Card className="lg:sticky lg:top-6">
       <CardHeader className="flex flex-row items-center justify-between gap-2">
         <CardTitle className="flex items-center gap-2">
-          <Monitor className="size-4" /> Live screen
+          <Monitor className="size-4" /> Screen
         </CardTitle>
         <div className="flex items-center gap-1">
-          {task.kind !== "no_screen" && (
+          {task.kind === "warmup" && (
             <Badge variant={paused ? "outline" : "secondary"} className="gap-1">
               <span className={cn("size-1.5 rounded-full", paused ? "bg-muted-foreground" : "animate-pulse bg-red-500")} />
               {paused ? "Paused" : "Live"}
             </Badge>
           )}
+          {task.kind === "idle" && <Badge variant="outline">Idle</Badge>}
           <Button
             size="icon-sm"
             variant="ghost"
-            title={paused ? "Resume view" : "Pause view"}
+            title={paused ? "Resume" : "Pause"}
             disabled={task.kind === "no_screen"}
             onClick={() => setPaused(!paused)}
           >
             {paused ? <Play /> : <Pause />}
           </Button>
-          <Button size="icon-sm" variant="ghost" title={big ? "Smaller" : "Bigger"} onClick={() => setBig(!big)}>
+          <Button size="icon-sm" variant="ghost" title={big ? "Shrink" : "Expand"} onClick={() => setBig(!big)}>
             <Maximize2 />
           </Button>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-3">
         <LiveScreen serial={device.serial} task={task} paused={paused} size={big ? "lg" : "md"} />
-        {task.kind === "idle" && <p className="text-xs text-muted-foreground">Idle. Nothing is running.</p>}
       </CardContent>
     </Card>
   );
@@ -110,7 +110,7 @@ export function LiveScreen({ serial, task, paused, size }: { serial: string; tas
       ) : (
         <div className="flex h-full flex-col items-center justify-center gap-2 bg-neutral-950 p-4 text-center text-xs text-neutral-400">
           <Monitor className="size-8" />
-          No screen
+          Unavailable
           {size !== "sm" && <span className="text-neutral-500">{task.reason}</span>}
         </div>
       )}
@@ -124,7 +124,7 @@ function WarmupScreen({ task, paused, size }: { task: Extract<LiveTask, { kind: 
   const [index, setIndex] = useState(0);
   const [liked, setLiked] = useState<Set<number>>(new Set());
   const [heart, setHeart] = useState<number | null>(null);
-  const [log, setLog] = useState<LogLine[]>([{ id: 0, text: `Warm-up started for @${task.account}` }]);
+  const [log, setLog] = useState<LogLine[]>([{ id: 0, text: `Started @${task.account}` }]);
   const current = videos[index];
 
   const addLog = (text: string) => setLog((l) => [{ id: Date.now() + Math.random(), text }, ...l].slice(0, 6));
@@ -133,7 +133,7 @@ function WarmupScreen({ task, paused, size }: { task: Extract<LiveTask, { kind: 
   useEffect(() => {
     if (paused) return;
     const v = current;
-    addLog(`Watching @${v.creator} for ${v.watchSec}s`);
+    addLog(`Watching @${v.creator} (${v.watchSec}s)`);
     const timers: number[] = [];
     if (Math.random() < 0.35) {
       timers.push(
@@ -147,7 +147,7 @@ function WarmupScreen({ task, paused, size }: { task: Extract<LiveTask, { kind: 
     }
     timers.push(
       window.setTimeout(() => {
-        addLog("Swipe up");
+        addLog("Swiped up");
         setVideos((vs) => [...vs, makeVideo(++nextId.current)]);
         setIndex((i) => i + 1);
       }, v.watchSec * 1000),
@@ -262,13 +262,13 @@ function PhoneFrame({ size, children }: { size: ScreenSize; children: React.Reac
         {children}
       </div>
       {size !== "sm" && <div className="flex gap-6 text-muted-foreground">
-        <Button size="icon-xs" variant="ghost" title="Back (mock)">
+        <Button size="icon-xs" variant="ghost" title="Back">
           <Triangle className="-rotate-90" />
         </Button>
-        <Button size="icon-xs" variant="ghost" title="Home (mock)">
+        <Button size="icon-xs" variant="ghost" title="Home">
           <Circle />
         </Button>
-        <Button size="icon-xs" variant="ghost" title="Recent apps (mock)">
+        <Button size="icon-xs" variant="ghost" title="Recents">
           <Square />
         </Button>
       </div>}

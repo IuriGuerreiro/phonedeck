@@ -2,9 +2,9 @@
 export type ScheduledRun = { at: Date; label: string; accounts: number };
 
 const SLOTS = [
-  { time: "09:00", label: "Morning warm-up · all accounts", accounts: 5 },
-  { time: "14:30", label: "Afternoon warm-up · Gym group", accounts: 2 },
-  { time: "20:00", label: "Evening warm-up · all accounts", accounts: 5 },
+  { time: "09:00", label: "Morning · All accounts", accounts: 5 },
+  { time: "14:30", label: "Afternoon · Gym", accounts: 2 },
+  { time: "20:00", label: "Evening · All accounts", accounts: 5 },
 ];
 
 /** The next `count` runs from now, across today and the following days. */
@@ -23,10 +23,10 @@ export function upcomingRuns(count = 3, now = new Date()): ScheduledRun[] {
   return runs;
 }
 
-/** "in 2 h 15 min" style countdown. */
+/** "in 2h 15m" style countdown. */
 export function untilText(at: Date, now = new Date()) {
   const mins = Math.max(0, Math.round((at.getTime() - now.getTime()) / 60_000));
-  if (mins < 60) return `in ${mins} min`;
+  if (mins < 60) return `in ${mins}m`;
   const h = Math.floor(mins / 60);
-  return `in ${h} h${mins % 60 ? ` ${mins % 60} min` : ""}`;
+  return `in ${h}h${mins % 60 ? ` ${mins % 60}m` : ""}`;
 }

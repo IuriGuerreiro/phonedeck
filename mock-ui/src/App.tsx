@@ -54,7 +54,7 @@ function Shell() {
   function reset() {
     active.reset?.();
     setResetCount((n) => n + 1);
-    toast.success("Mock data reset");
+    toast.success("Data reset");
   }
 
   return (
@@ -62,10 +62,7 @@ function Shell() {
       <aside className="flex w-60 shrink-0 flex-col gap-4 border-r bg-sidebar p-3">
         <div className="flex items-center gap-2 px-2 pt-1">
           <Smartphone className="size-5" />
-          <div>
-            <div className="text-sm font-semibold leading-tight">PhoneDeck</div>
-            <div className="text-xs text-muted-foreground">Mock UI</div>
-          </div>
+          <div className="text-sm font-semibold leading-tight">PhoneDeck</div>
         </div>
         {groupFeatures(features).map(([group, items]) => (
           <nav key={group} className="flex flex-col gap-0.5">
@@ -97,7 +94,7 @@ function Shell() {
           <Button
             variant="ghost"
             size="icon-sm"
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           >
             {theme === "dark" ? <Sun /> : <Moon />}
@@ -108,8 +105,8 @@ function Shell() {
         <div className={cn("mx-auto flex flex-col gap-4", !active.wide && "max-w-5xl")}>
           {active.reset && (
             <div className="flex justify-end">
-              <Button variant="outline" size="sm" onClick={reset}>
-                <RotateCcw /> Reset mock data
+              <Button variant="outline" size="sm" onClick={reset} title="Reset demo data">
+                <RotateCcw /> Reset
               </Button>
             </div>
           )}

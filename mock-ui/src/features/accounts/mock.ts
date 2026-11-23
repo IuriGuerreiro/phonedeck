@@ -38,10 +38,10 @@ const seed = (): Account[] => [
     platform: "tiktok",
     username: "daily.stretch",
     status: "needs_attention",
-    note: "Captcha shown after switching accounts. Solve it on the phone.",
+    note: "Captcha triggered after switch.",
     lastWarmupAt: null,
     groups: ["wellness"],
-    notes: "Got a captcha twice. Go slower.",
+    notes: "Hit captcha twice. Keep pace slow.",
     followers: 58,
     captchas7d: 2,
     errors7d: 2,
@@ -85,7 +85,7 @@ export const accountsApi = {
 
   async switchTo(username: string): Promise<void> {
     await delay(1200);
-    if (Math.random() < 0.15) throw new Error(`Could not find @${username} in the account list`);
+    if (Math.random() < 0.15) throw new Error(`@${username} not found on device`);
   },
 
   async get(id: number): Promise<Account | null> {

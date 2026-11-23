@@ -41,7 +41,7 @@ export const settingsSections: SettingsSectionDef[] = [
   },
   {
     id: "groups",
-    label: "Account groups",
+    label: "Groups",
     icon: Tags,
     group: "Automation",
     component: GroupsSection,
@@ -49,7 +49,7 @@ export const settingsSections: SettingsSectionDef[] = [
   },
   {
     id: "safety",
-    label: "Safety limits",
+    label: "Safety",
     icon: ShieldCheck,
     group: "Automation",
     component: SafetySection,

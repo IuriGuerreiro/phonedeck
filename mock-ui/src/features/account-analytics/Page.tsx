@@ -54,14 +54,11 @@ export default function AccountAnalyticsPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold">Account analytics</h1>
-          <p className="text-sm text-muted-foreground">Growth and reach for each account.</p>
-        </div>
+        <h1 className="text-lg font-semibold">Account analytics</h1>
         <div className="flex gap-1">
           {RANGES.map((r) => (
             <Button key={r} size="sm" variant={range === r ? "secondary" : "ghost"} onClick={() => setRange(r)}>
-              Last {r} days
+              {r}d
             </Button>
           ))}
         </div>
@@ -79,17 +76,17 @@ export default function AccountAnalyticsPage() {
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <StatTile label="Followers" value={fmtNum(account.followers)} />
-            <StatTile label="Followers gained" value={`${sel.gained >= 0 ? "+" : ""}${fmtNum(sel.gained)}`} sub={`last ${range} days`} />
-            <StatTile label="Videos posted" value={String(sel.posts)} sub={`last ${range} days`} />
-            <StatTile label="Views" value={fmtNum(sel.views)} sub="from those videos" />
-            <StatTile label="Avg engagement" value={`${(sel.eng * 100).toFixed(1)}%`} sub="likes + comments + shares" />
+            <StatTile label="Gained" value={`${sel.gained >= 0 ? "+" : ""}${fmtNum(sel.gained)}`} sub={`Last ${range}d`} />
+            <StatTile label="Posts" value={String(sel.posts)} sub={`Last ${range}d`} />
+            <StatTile label="Views" value={fmtNum(sel.views)} sub={`Last ${range}d`} />
+            <StatTile label="Engagement" value={`${(sel.eng * 100).toFixed(1)}%`} />
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Followers</CardTitle>
-                <CardDescription>@{account.username} · last {range} days</CardDescription>
+                <CardDescription>@{account.username}</CardDescription>
               </CardHeader>
               <CardContent>
                 {sel.h.length ? (
@@ -101,8 +98,8 @@ export default function AccountAnalyticsPage() {
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>Views per day</CardTitle>
-                <CardDescription>All videos from @{account.username}</CardDescription>
+                <CardTitle>Daily views</CardTitle>
+                <CardDescription>@{account.username}</CardDescription>
               </CardHeader>
               <CardContent>
                 {sel.h.length ? (
@@ -119,7 +116,6 @@ export default function AccountAnalyticsPage() {
       <Card>
         <CardHeader>
           <CardTitle>All accounts</CardTitle>
-          <CardDescription>Last {range} days. Click a row to see it above.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -128,9 +124,9 @@ export default function AccountAnalyticsPage() {
                 <TableHead>Account</TableHead>
                 <TableHead className="text-right">Followers</TableHead>
                 <TableHead className="text-right">Gained</TableHead>
-                <TableHead className="text-right">Videos</TableHead>
+                <TableHead className="text-right">Posts</TableHead>
                 <TableHead className="text-right">Views</TableHead>
-                <TableHead className="text-right">Views / video</TableHead>
+                <TableHead className="text-right">Avg views</TableHead>
                 <TableHead className="text-right">Engagement</TableHead>
                 <TableHead>Health</TableHead>
               </TableRow>

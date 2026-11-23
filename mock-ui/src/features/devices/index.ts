@@ -8,7 +8,7 @@ export const feature: Feature = {
   id: "devices",
   label: "Devices",
   icon: Smartphone,
-  group: "Phones",
+  group: "Manage",
   status: "draft",
   wide: true,
   page: lazy(() => import("./Page")),

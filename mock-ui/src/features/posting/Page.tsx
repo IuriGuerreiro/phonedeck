@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { VideoThumb } from "@/components/shared/VideoThumb";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { postsApi, usePosts, type Post, type PostStatus } from "@/mocks/posts";
@@ -53,10 +53,7 @@ export default function PostingPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-semibold">Posting</h1>
-          <p className="text-sm text-muted-foreground">Plan videos for your accounts. The phone posts them at the set time.</p>
-        </div>
+        <h1 className="text-lg font-semibold">Posting</h1>
         <Button onClick={() => setComposing(true)} disabled={composing}>
           <Plus /> New post
         </Button>
@@ -73,7 +70,7 @@ export default function PostingPage() {
       </div>
 
       {list.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nothing here.</p>
+        <p className="text-sm text-muted-foreground">No posts.</p>
       ) : (
         [...byDay].map(([dayKey, items]) => (
           <section key={dayKey} className="flex flex-col gap-2">
@@ -177,18 +174,15 @@ function Composer({ accounts, onClose }: { accounts: Account[]; onClose: () => v
       });
     }
     toast.success(
-      status === "draft" ? "Saved as draft" : `Scheduled for ${picked.length} account${picked.length > 1 ? "s" : ""}`,
+      status === "draft" ? "Draft saved" : `Scheduled for ${picked.length} account${picked.length > 1 ? "s" : ""}`,
     );
     onClose();
   }
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between">
-        <div className="flex flex-col gap-1">
-          <CardTitle>New post</CardTitle>
-          <CardDescription>Picking several accounts makes one post for each.</CardDescription>
-        </div>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>New post</CardTitle>
         <Button size="icon-sm" variant="ghost" onClick={onClose} title="Close">
           <X />
         </Button>
@@ -203,7 +197,7 @@ function Composer({ accounts, onClose }: { accounts: Account[]; onClose: () => v
           )}
         >
           <Film className="size-6" />
-          {video ?? "Choose video (mock)"}
+          {video ?? "Select video"}
         </button>
 
         <div className="flex flex-col gap-3">
@@ -214,7 +208,7 @@ function Composer({ accounts, onClose }: { accounts: Account[]; onClose: () => v
               onChange={(e) => setCaption(e.target.value)}
               rows={2}
               maxLength={2200}
-              placeholder="What's this video about?"
+              placeholder="Write a caption…"
               className="w-full resize-y rounded-lg border bg-transparent px-2.5 py-1.5 text-sm text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
             />
           </label>
@@ -241,7 +235,7 @@ function Composer({ accounts, onClose }: { accounts: Account[]; onClose: () => v
             </div>
           </div>
           <label className="flex flex-col gap-1 text-xs text-muted-foreground sm:w-64">
-            Post at
+            Schedule
             <Input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
           </label>
           <div className="flex gap-2">

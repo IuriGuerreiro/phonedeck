@@ -12,11 +12,11 @@ export type Tool = {
 };
 
 const seed = (): Tool[] => [
-  { id: "node", name: "Node.js", why: "Runs the automation engine.", ok: true, version: "22.11.0", optional: false },
-  { id: "java", name: "Java", why: "Needed by Appium to talk to Android.", ok: false, version: null, optional: false },
-  { id: "adb", name: "Android platform tools (adb)", why: "Connects to phones over USB.", ok: false, version: null, optional: false },
-  { id: "appium", name: "Appium", why: "Taps and swipes on the phone.", ok: false, version: null, optional: false },
-  { id: "scrcpy", name: "scrcpy", why: "Shows the phone screen on this PC.", ok: false, version: null, optional: true },
+  { id: "node", name: "Node.js", why: "Automation runtime", ok: true, version: "22.11.0", optional: false },
+  { id: "java", name: "Java", why: "Required by Appium", ok: false, version: null, optional: false },
+  { id: "adb", name: "Platform Tools (ADB)", why: "USB device bridge", ok: false, version: null, optional: false },
+  { id: "appium", name: "Appium", why: "Device UI automation", ok: false, version: null, optional: false },
+  { id: "scrcpy", name: "scrcpy", why: "Live screen mirroring", ok: false, version: null, optional: true },
 ];
 
 let tools = seed();
@@ -25,14 +25,14 @@ let helpersInstalled = false;
 
 export const PHONE_STEPS = [
   {
-    title: "Turn on Developer options",
-    detail: "Settings → About phone → tap Build number 7 times. On Xiaomi tap MIUI / OS version instead.",
+    title: "Enable Developer options",
+    detail: "Settings → About phone → tap Build number 7 times (MIUI / OS version on Xiaomi)",
   },
-  { title: "Turn on USB debugging", detail: "Settings → Developer options → USB debugging." },
-  { title: "Plug the phone into this PC" },
+  { title: "Enable USB debugging", detail: "Settings → Developer options → USB debugging" },
+  { title: "Connect via USB" },
   {
-    title: "Allow this computer",
-    detail: "Unlock the phone. On “Allow USB debugging?” tick “Always allow” and tap Allow.",
+    title: "Trust this computer",
+    detail: 'Unlock the device, check "Always allow", and tap Allow',
   },
 ];
 

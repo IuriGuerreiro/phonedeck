@@ -62,21 +62,18 @@ function VideoList({ username }: { username: (id: number) => string }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold">Video analytics</h1>
-        <p className="text-sm text-muted-foreground">Every posted video. Click one for details.</p>
-      </div>
+      <h1 className="text-lg font-semibold">Video analytics</h1>
 
       <div className="grid gap-3 sm:grid-cols-4">
         <StatTile label="Videos" value={String(rows.length)} />
-        <StatTile label="Total views" value={fmtNum(totals.views)} />
-        <StatTile label="Total likes" value={fmtNum(totals.likes)} />
-        <StatTile label="Followers gained" value={fmtNum(totals.followers)} />
+        <StatTile label="Views" value={fmtNum(totals.views)} />
+        <StatTile label="Likes" value={fmtNum(totals.likes)} />
+        <StatTile label="New followers" value={fmtNum(totals.followers)} />
       </div>
 
       <div className="flex flex-wrap gap-1">
         <Button size="sm" variant={account === null ? "secondary" : "ghost"} onClick={() => setAccount(null)}>
-          All accounts
+          All
         </Button>
         {accountIds.map((aid) => (
           <Button key={aid} size="sm" variant={account === aid ? "secondary" : "ghost"} onClick={() => setAccount(aid)}>
@@ -93,8 +90,8 @@ function VideoList({ username }: { username: (id: number) => string }) {
                 <Th k="at">Video</Th>
                 <Th k="views" className="text-right">Views</Th>
                 <Th k="engagement" className="text-right">Engagement</Th>
-                <Th k="completion" className="text-right">Watched to end</Th>
-                <Th k="followers" className="text-right">New followers</Th>
+                <Th k="completion" className="text-right">Completion</Th>
+                <Th k="followers" className="text-right">Followers</Th>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -119,7 +116,7 @@ function VideoList({ username }: { username: (id: number) => string }) {
               ))}
             </TableBody>
           </Table>
-          {rows.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No posted videos yet.</p>}
+          {rows.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No posted videos.</p>}
         </CardContent>
       </Card>
     </div>
@@ -130,7 +127,7 @@ function VideoDetail({ id, username }: { id: number; username: (id: number) => s
   const post = usePosts().find((p) => p.id === id);
   const back = (
     <Button variant="ghost" size="sm" className="self-start" render={<a href="#video-analytics" />}>
-      <ArrowLeft /> All videos
+      <ArrowLeft /> Videos
     </Button>
   );
   const s = post && videoStats(post);
@@ -138,7 +135,7 @@ function VideoDetail({ id, username }: { id: number; username: (id: number) => s
     return (
       <div className="flex flex-col gap-3">
         {back}
-        <p className="text-sm text-muted-foreground">No stats for this video yet.</p>
+        <p className="text-sm text-muted-foreground">No analytics available.</p>
       </div>
     );
 
@@ -154,7 +151,7 @@ function VideoDetail({ id, username }: { id: number; username: (id: number) => s
             <a href={`#accounts/${post.accountId}`} className="text-foreground underline-offset-4 hover:underline">
               @{username(post.accountId)}
             </a>{" "}
-            · posted {new Date(post.at).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} · {post.durationSec}s
+            · {new Date(post.at).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} · {post.durationSec}s
           </p>
         </div>
       </div>
@@ -165,14 +162,13 @@ function VideoDetail({ id, username }: { id: number; username: (id: number) => s
         <StatTile label="Comments" value={fmtNum(s.comments)} />
         <StatTile label="Shares" value={fmtNum(s.shares)} />
         <StatTile label="Saves" value={fmtNum(s.saves)} />
-        <StatTile label="New followers" value={`+${fmtNum(s.newFollowers)}`} />
+        <StatTile label="Followers" value={`+${fmtNum(s.newFollowers)}`} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Views per day</CardTitle>
-            <CardDescription>Since it was posted.</CardDescription>
+            <CardTitle>Daily views</CardTitle>
           </CardHeader>
           <CardContent>
             <BarChart
@@ -183,13 +179,13 @@ function VideoDetail({ id, username }: { id: number; username: (id: number) => s
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Viewers still watching</CardTitle>
+            <CardTitle>Retention</CardTitle>
             <CardDescription>
-              Average watch time {s.avgWatchSec}s of {post.durationSec}s · {pct(s.completionRate)} watched to the end
+              Avg watch {s.avgWatchSec}s / {post.durationSec}s · {pct(s.completionRate)} completed
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <LineChart unit="% still watching" data={s.retention.map((v, i) => ({ label: `${i * 10}% in`, value: v }))} />
+            <LineChart unit="%" data={s.retention.map((v, i) => ({ label: `${i * 10}%`, value: v }))} />
           </CardContent>
         </Card>
       </div>
@@ -197,7 +193,7 @@ function VideoDetail({ id, username }: { id: number; username: (id: number) => s
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Where views came from</CardTitle>
+            <CardTitle>Traffic sources</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2.5">
             {s.sources.map((src) => (
@@ -213,11 +209,10 @@ function VideoDetail({ id, username }: { id: number; username: (id: number) => s
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Rates</CardTitle>
-            <CardDescription>Out of all views.</CardDescription>
+            <CardTitle>Engagement</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-1.5 text-sm">
-            <Rate k="Engagement (likes + comments + shares)" v={pct(engagement(s))} />
+            <Rate k="Engagement rate" v={pct(engagement(s))} />
             <Rate k="Like rate" v={pct(s.likes / s.views)} />
             <Rate k="Share rate" v={pct(s.shares / s.views)} />
             <Rate k="Follow rate" v={pct(s.newFollowers / s.views)} />
