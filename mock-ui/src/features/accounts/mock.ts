@@ -1,5 +1,5 @@
 // Fake accounts backend: every account on every phone, kept in memory.
-import { delay, randInt } from "@/lib/mock";
+import { delay, randInt, seeded } from "@/lib/mock";
 import { devicesApi } from "@/mocks/devices";
 import { groupsApi } from "@/mocks/groups";
 
@@ -140,12 +140,6 @@ export const accountsApi = {
     await delay(100);
   },
 };
-
-/** Small repeatable random generator, so charts don't change on every reload. */
-function seeded(seed: number) {
-  let x = seed * 9301 + 49297;
-  return () => ((x = (x * 9301 + 49297) % 233280) / 233280);
-}
 
 /** Put the fake data back to its starting state. */
 export function reset() {

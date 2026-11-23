@@ -14,3 +14,9 @@ export function timeAgo(iso: string) {
   if (hours < 48) return `${hours} h ago`;
   return `${Math.round(hours / 24)} days ago`;
 }
+
+/** Small repeatable random generator: the same seed always gives the same numbers. */
+export function seeded(seed: number) {
+  let x = (seed * 9301 + 49297) % 233280;
+  return () => (x = (x * 9301 + 49297) % 233280) / 233280;
+}
