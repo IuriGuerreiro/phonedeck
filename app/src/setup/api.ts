@@ -1,6 +1,5 @@
 // Typed wrappers for the setup commands in src-tauri/src/setup/.
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, listen } from "@/lib/bridge";
 
 export type ToolId = "node" | "java" | "adb" | "appium" | "scrcpy";
 

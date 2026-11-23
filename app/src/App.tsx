@@ -1,302 +1,191 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowUp, Monitor, Play, RefreshCw, RotateCcw, Smartphone } from "lucide-react";
+import { Suspense, useEffect, useState } from "react";
+import { FlaskConical, Moon, RotateCcw, Settings, Smartphone, Sun } from "lucide-react";
 import { toast } from "sonner";
 
-import { api, type Device, type Job, type JobRun, type WorkerStatus } from "@/api";
-import { AccountsCard } from "@/accounts/AccountsCard";
+import { api, type WorkerStatus } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Toaster } from "@/components/ui/sonner";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { features, type Feature } from "@/features";
+import { setTheme, useResolvedTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import { SetupLauncher } from "@/setup/SetupLauncher";
+import { SettingsProvider, useSettings } from "@/settings/SettingsContext";
+import { setupApi } from "@/setup/api";
+import { WebAuthGate } from "@/components/WebAuthGate";
 
-const APPS = [
-  { id: "instagram", label: "Instagram", package: "com.instagram.android" },
-  { id: "tiktok", label: "TikTok", package: "com.zhiliaoapp.musically" },
-  { id: "facebook", label: "Facebook", package: "com.facebook.katana" },
-] as const;
-type AppChoice = (typeof APPS)[number]["id"] | "custom";
+/** Opened when the hash names no page. A real page, not a preview. */
+const HOME = "devices";
 
-const DEVICE_STATE: Record<string, { label: string; hint?: string }> = {
-  device: { label: "Ready" },
-  unauthorized: { label: "Not allowed", hint: "Unlock the phone and accept the USB debugging prompt." },
-  offline: { label: "Offline", hint: "Reconnect the USB cable." },
-  disconnected: { label: "Unplugged" },
-};
+/** Feature id from the hash. "#devices/R58N" opens "devices"; the page reads the rest. */
+const currentHash = () => window.location.hash.slice(1).split("/")[0];
+
+/** Features grouped by `group`, keeping registry order. */
+function groupFeatures(list: Feature[]) {
+  const groups = new Map<string, Feature[]>();
+  for (const f of list) groups.set(f.group, [...(groups.get(f.group) ?? []), f]);
+  return [...groups];
+}
 
 export default function App() {
-  const [worker, setWorker] = useState<WorkerStatus>({ state: "starting" });
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [runs, setRuns] = useState<JobRun[]>([]);
-  const [appChoice, setAppChoice] = useState<AppChoice>("instagram");
-  const [customPkg, setCustomPkg] = useState("");
-  const pkg =
-    appChoice === "custom" ? customPkg : APPS.find((a) => a.id === appChoice)!.package;
-  const [busy, setBusy] = useState<Job["action"] | null>(null);
+  return (
+    <WebAuthGate>
+      <SettingsProvider>
+        <Shell />
+      </SettingsProvider>
+    </WebAuthGate>
+  );
+}
 
-  const refreshDevices = useCallback(async () => {
-    try {
-      const list = await api.listDevices();
-      setDevices(list);
-      setSelected((cur) =>
-        cur && list.some((d) => d.serial === cur)
-          ? cur
-          : (list.find((d) => d.state === "device")?.serial ?? null),
-      );
-    } catch (e) {
-      toast.error(String(e));
-    }
-  }, []);
-
-  const refreshRuns = useCallback(() => {
-    api.recentRuns(20).then(setRuns).catch((e) => toast.error(String(e)));
-  }, []);
+function Shell() {
+  const { openSettings } = useSettings();
+  const theme = useResolvedTheme();
+  // The open page lives in the URL hash so a reload stays on it.
+  const [id, setId] = useState(currentHash);
+  // Bumped by Reset to remount the page with fresh state.
+  const [resetCount, setResetCount] = useState(0);
 
   useEffect(() => {
-    api.workerStatus().then(setWorker);
-    const unlisten = api.onWorkerStatus(setWorker);
-    refreshDevices();
-    refreshRuns();
-    const timer = setInterval(refreshDevices, 3000);
-    return () => {
-      clearInterval(timer);
-      unlisten.then((f) => f());
-    };
-  }, [refreshDevices, refreshRuns]);
+    const onHash = () => setId(currentHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
-  const device = devices.find((d) => d.serial === selected);
-  const canRun = worker.state === "ready" && device?.state === "device" && !busy;
+  // First run: send the user to Setup while a required tool is missing.
+  useEffect(() => {
+    setupApi
+      .status()
+      .then((s) => {
+        if (s.tools.some((t) => !t.ok && !t.optional)) window.location.hash = "setup";
+      })
+      .catch((e) => toast.error(String(e)));
+  }, []);
 
-  async function run(job: Job) {
-    if (!selected) return;
-    setBusy(job.action);
-    // The run shows up as "running" right away; refresh again when it ends.
-    setTimeout(refreshRuns, 150);
-    try {
-      await api.runJob(selected, job);
-    } catch (e) {
-      toast.error(String(e));
-    } finally {
-      setBusy(null);
-      refreshRuns();
-    }
+  const active = features.find((f) => f.id === id) ?? features.find((f) => f.id === HOME)!;
+  const Page = active.page;
+
+  function reset() {
+    active.reset?.();
+    setResetCount((n) => n + 1);
+    toast.success("Sample data reset");
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="flex items-center justify-between border-b px-6 py-3">
-        <h1 className="text-base font-semibold">PhoneDeck</h1>
-        <div className="flex items-center gap-2">
-          <SetupLauncher />
-          <EngineStatus status={worker} onRestart={() => api.restartWorker()} />
+    <div className="flex min-h-screen bg-background text-foreground">
+      <aside className="flex w-60 shrink-0 flex-col gap-4 border-r bg-sidebar p-3">
+        <div className="flex items-center gap-2 px-2 pt-1">
+          <Smartphone className="size-5" />
+          <div className="text-sm font-semibold leading-tight">PhoneDeck</div>
         </div>
-      </header>
-
-      <main className="grid gap-4 p-6 md:grid-cols-[320px_1fr]">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Phones</CardTitle>
-            <Button variant="ghost" size="icon-sm" onClick={refreshDevices} title="Refresh">
-              <RefreshCw />
-            </Button>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2">
-            {devices.length === 0 && (
-              <p className="text-sm text-muted-foreground">
-                No phones found. Plug one in with USB debugging on.
-              </p>
-            )}
-            {devices.map((d) => {
-              const st = DEVICE_STATE[d.state] ?? { label: d.state };
-              return (
-                <button
-                  key={d.serial}
-                  onClick={() => setSelected(d.serial)}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted",
-                    selected === d.serial && "border-primary bg-muted",
-                  )}
-                >
-                  <Smartphone className="size-5 shrink-0 text-muted-foreground" />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-medium">{d.name ?? d.model ?? d.serial}</div>
-                    <div className="truncate text-xs text-muted-foreground">{d.serial}</div>
-                  </div>
-                  <Badge variant={d.state === "device" ? "default" : "outline"}>{st.label}</Badge>
-                </button>
-              );
-            })}
-            {device && DEVICE_STATE[device.state]?.hint && (
-              <p className="text-xs text-muted-foreground">{DEVICE_STATE[device.state].hint}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="flex flex-col gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Actions</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="flex flex-wrap gap-2">
-                {APPS.map((a) => (
-                  <Button
-                    key={a.id}
-                    variant={appChoice === a.id ? "default" : "outline"}
-                    onClick={() => setAppChoice(a.id)}
-                  >
-                    {a.label}
-                  </Button>
-                ))}
-                <Button
-                  variant={appChoice === "custom" ? "default" : "outline"}
-                  onClick={() => setAppChoice("custom")}
-                >
-                  Custom
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                {appChoice === "custom" ? (
-                  <Input
-                    value={customPkg}
-                    onChange={(e) => setCustomPkg(e.target.value)}
-                    placeholder="App package, e.g. com.twitter.android"
-                    className="font-mono"
-                  />
-                ) : (
-                  <div className="flex h-8 flex-1 items-center rounded-lg border bg-muted/50 px-2.5 font-mono text-sm text-muted-foreground">
-                    {pkg}
-                  </div>
+        {groupFeatures(features).map(([group, items]) => (
+          <nav key={group} className="flex flex-col gap-0.5">
+            <div className="px-2 pb-1 text-xs font-medium text-muted-foreground">{group}</div>
+            {items.map((f) => (
+              <a
+                key={f.id}
+                href={`#${f.id}`}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent",
+                  f.id === active.id && "bg-sidebar-accent font-medium text-sidebar-accent-foreground",
                 )}
-                <Button
-                  disabled={!canRun || !pkg.trim()}
-                  onClick={() => run({ action: "open_app", package: pkg.trim() })}
-                >
-                  <Play /> {busy === "open_app" ? "Opening…" : "Open app"}
+              >
+                <f.icon className="size-4 shrink-0" />
+                <span className="flex-1 truncate">{f.label}</span>
+                {f.useCount && <CountBadge useCount={f.useCount} />}
+                {f.preview && (
+                  <Badge variant="outline" title="Sample data, not connected yet">
+                    Preview
+                  </Badge>
+                )}
+              </a>
+            ))}
+          </nav>
+        ))}
+        <EngineStatus />
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => openSettings()}
+            className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
+          >
+            <Settings className="size-4" /> Settings
+          </button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title={theme === "dark" ? "Light mode" : "Dark mode"}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <Sun /> : <Moon />}
+          </Button>
+        </div>
+      </aside>
+      <main className="min-w-0 flex-1 p-6">
+        <div className={cn("mx-auto flex flex-col gap-4", !active.wide && "max-w-5xl")}>
+          {active.preview && (
+            <div className="flex items-center gap-3 rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm">
+              <FlaskConical className="size-4 shrink-0 text-muted-foreground" />
+              <span className="flex-1 text-muted-foreground">
+                Preview: this page shows sample data. It is not connected to your phones yet.
+              </span>
+              {active.reset && (
+                <Button variant="ghost" size="sm" onClick={reset} title="Reset sample data">
+                  <RotateCcw /> Reset
                 </Button>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" disabled={!canRun} onClick={() => run({ action: "swipe_up" })}>
-                  <ArrowUp /> {busy === "swipe_up" ? "Swiping…" : "Swipe up"}
-                </Button>
-                {/* Works while a job runs: the window is view-only. */}
-                <Button
-                  variant="outline"
-                  disabled={device?.state !== "device"}
-                  onClick={() =>
-                    device &&
-                    api
-                      .viewPhone(device.serial, `PhoneDeck · ${device.name ?? device.model ?? device.serial}`)
-                      .catch((e) => toast.error(String(e)))
-                  }
-                >
-                  <Monitor /> View screen
-                </Button>
-              </div>
-              {worker.state === "ready" && !device && (
-                <p className="text-xs text-muted-foreground">Pick a phone first.</p>
               )}
-            </CardContent>
-          </Card>
-
-          {device && appChoice === "tiktok" && (
-            <AccountsCard
-              serial={device.serial}
-              ready={worker.state === "ready" && device.state === "device"}
-              onJobDone={refreshRuns}
-            />
+            </div>
           )}
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent runs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {runs.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nothing has run yet.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Phone</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Result</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {runs.map((r) => (
-                      <TableRow key={r.id}>
-                        <TableCell className="text-muted-foreground">{localTime(r.startedAt)}</TableCell>
-                        <TableCell className="font-mono text-xs">{r.serial}</TableCell>
-                        <TableCell>{r.action}</TableCell>
-                        <TableCell className="max-w-md">
-                          <RunStatus run={r} />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+          <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+            <Page key={`${active.id}-${resetCount}`} />
+          </Suspense>
         </div>
       </main>
-      <Toaster richColors position="bottom-right" />
+      <Toaster theme={theme} />
     </div>
   );
 }
 
-function EngineStatus({ status, onRestart }: { status: WorkerStatus; onRestart: () => void }) {
+/** Calls the feature's count hook in its own component so hooks stay in a stable order. */
+function CountBadge({ useCount }: { useCount: () => number }) {
+  const n = useCount();
+  return n > 0 ? (
+    <span className="rounded-full bg-[#d03b3b] px-1.5 text-[10px] font-semibold text-white tabular-nums">{n}</span>
+  ) : null;
+}
+
+/** Appium engine state, with a restart button. Sits at the bottom of the sidebar. */
+function EngineStatus() {
+  const [status, setStatus] = useState<WorkerStatus>({ state: "starting" });
+
+  useEffect(() => {
+    api.workerStatus().then(setStatus);
+    const unlisten = api.onWorkerStatus(setStatus);
+    return () => {
+      unlisten.then((f) => f());
+    };
+  }, []);
+
   return (
-    <div className="flex items-center gap-2 text-sm">
+    <div className="mt-auto flex items-center gap-2 rounded-md px-2 py-1 text-xs">
       <span
         className={cn(
-          "size-2 rounded-full",
+          "size-2 shrink-0 rounded-full",
           status.state === "ready" && "bg-green-500",
           status.state === "starting" && "animate-pulse bg-amber-500",
           status.state === "failed" && "bg-red-500",
         )}
       />
-      <span className="text-muted-foreground" title={status.state === "failed" ? status.error : undefined}>
-        {status.state === "ready" && `Appium ready on :${status.appiumPort}`}
-        {status.state === "starting" && "Starting Appium…"}
-        {status.state === "failed" && `Engine failed: ${status.error}`}
+      <span
+        className="flex-1 truncate text-muted-foreground"
+        title={status.state === "failed" ? status.error : undefined}
+      >
+        {status.state === "ready" && "Engine ready"}
+        {status.state === "starting" && "Starting engine…"}
+        {status.state === "failed" && "Engine failed"}
       </span>
       {status.state !== "starting" && (
-        <Button variant="ghost" size="icon-sm" onClick={onRestart} title="Restart engine">
+        <Button variant="ghost" size="icon-xs" onClick={() => api.restartWorker()} title="Restart engine">
           <RotateCcw />
         </Button>
       )}
     </div>
   );
-}
-
-function RunStatus({ run }: { run: JobRun }) {
-  if (run.status === "running") return <Badge variant="secondary">Running…</Badge>;
-  if (run.status === "ok") return <Badge>Done</Badge>;
-  return (
-    <div className="flex items-start gap-2">
-      <Badge variant="destructive">Failed</Badge>
-      <span className="line-clamp-2 text-xs text-muted-foreground" title={run.error ?? ""}>
-        {run.error}
-      </span>
-    </div>
-  );
-}
-
-/** SQLite stores UTC as "YYYY-MM-DD HH:MM:SS". */
-function localTime(utc: string) {
-  return new Date(utc.replace(" ", "T") + "Z").toLocaleTimeString();
 }

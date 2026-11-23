@@ -9,7 +9,7 @@ export const feature: Feature = {
   label: "Setup",
   icon: Rocket,
   group: "Getting started",
-  status: "draft",
+  status: "shipped",
   page: lazy(() => import("./Page")),
   reset,
 };

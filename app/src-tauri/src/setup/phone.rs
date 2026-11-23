@@ -8,7 +8,7 @@ use std::{
 
 use serde::Serialize;
 
-use crate::adb::adb_path;
+use crate::adb::{adb_path, run as adb};
 
 /// Gives the logged-in user access to any USB device that exposes an adb interface
 /// (class ff, subclass 42, protocol 01), whatever the vendor.
@@ -72,18 +72,6 @@ pub async fn install_udev_rule() -> Result<(), String> {
     })
     .await
     .map_err(|e| e.to_string())?
-}
-
-fn adb(serial: &str, args: &[&str]) -> Result<String, String> {
-    let out = Command::new(adb_path())
-        .arg("-s")
-        .arg(serial)
-        .args(args)
-        .output()
-        .map_err(|e| format!("Could not run adb: {e}"))?;
-    let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
-    text.push_str(&String::from_utf8_lossy(&out.stderr));
-    if out.status.success() { Ok(text.trim().to_string()) } else { Err(text.trim().to_string()) }
 }
 
 const SERVER_PKG: &str = "io.appium.uiautomator2.server";

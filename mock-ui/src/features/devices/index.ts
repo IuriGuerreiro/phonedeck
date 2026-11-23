@@ -9,7 +9,7 @@ export const feature: Feature = {
   label: "Devices",
   icon: Smartphone,
   group: "Manage",
-  status: "draft",
+  status: "shipped",
   wide: true,
   page: lazy(() => import("./Page")),
   reset: devicesApi.reset,

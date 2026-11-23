@@ -1,7 +1,10 @@
 mod adb;
 mod db;
+mod live;
 mod setup;
+mod stats;
 mod viewer;
+mod web;
 mod worker;
 
 use serde::Serialize;
@@ -86,6 +89,7 @@ async fn restart_worker(app: AppHandle) -> CmdResult<()> {
 async fn run_job(
     db: State<'_, Db>,
     worker: State<'_, Worker>,
+    live: State<'_, live::Live>,
     serial: String,
     job: Value,
 ) -> CmdResult<Value> {
@@ -98,7 +102,9 @@ async fn run_job(
     let job = Value::Object(job);
 
     let run_id = db.start_run(&serial, &action, &job.to_string()).map_err(err)?;
+    live.start(&serial, run_id, &action, job["username"].as_str());
     let reply = worker.run(job.clone(), job_timeout(&job)).await;
+    live.finish(&serial, run_id);
     let outcome = reply.as_ref().map(Value::to_string).map_err(|e| e.message.clone());
     db.finish_run(run_id, &outcome).map_err(err)?;
     record_accounts(&db, &serial, &job, &reply).map_err(err)?;
@@ -112,9 +118,10 @@ async fn stop_job(worker: State<'_, Worker>, serial: String) -> CmdResult<()> {
     worker.run(job, Duration::from_secs(10)).await.map(|_| ()).map_err(|e| e.message)
 }
 
+/// Accounts on one phone, or on every phone when `serial` is omitted.
 #[tauri::command(async)]
-fn list_accounts(db: State<'_, Db>, serial: String) -> CmdResult<Vec<Account>> {
-    db.accounts(&serial).map_err(err)
+fn list_accounts(db: State<'_, Db>, serial: Option<String>) -> CmdResult<Vec<Account>> {
+    db.accounts(serial.as_deref()).map_err(err)
 }
 
 #[tauri::command(async)]
@@ -157,6 +164,12 @@ fn record_accounts(
     db.upsert_account(serial, platform, username, event)
 }
 
+/// The job running on each phone right now, with its latest progress line.
+#[tauri::command]
+fn live_jobs(live: State<'_, live::Live>) -> Vec<live::LiveJob> {
+    live.all()
+}
+
 #[tauri::command(async)]
 fn recent_runs(db: State<'_, Db>, limit: Option<u32>) -> CmdResult<Vec<JobRun>> {
     db.recent_runs(limit.unwrap_or(50)).map_err(err)
@@ -178,10 +191,15 @@ pub fn run() {
             setup::init(&data_dir);
             app.manage(Db::open(&data_dir.join("sma.db"))?);
 
+            // Before the worker: its progress events update this.
+            app.manage(live::Live::default());
             let worker = Worker::new();
             worker.start(app.handle());
             app.manage(worker);
             app.manage(viewer::Viewers::default());
+            // Last: it serves the state managed above.
+            let web = web::start(app.handle(), &data_dir);
+            app.manage(web);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -200,6 +218,11 @@ pub fn run() {
             setup::phone::phone_info,
             setup::phone::install_helper_apks,
             view_phone,
+            live_jobs,
+            stats::device_stats,
+            stats::screenshot,
+            stats::wake_screen,
+            web::web_info,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

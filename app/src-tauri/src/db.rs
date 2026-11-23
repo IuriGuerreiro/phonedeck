@@ -155,11 +155,13 @@ impl Db {
         Ok(())
     }
 
-    pub fn accounts(&self, serial: &str) -> rusqlite::Result<Vec<Account>> {
+    /// `None` lists the accounts on every phone.
+    pub fn accounts(&self, serial: Option<&str>) -> rusqlite::Result<Vec<Account>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
             "SELECT id, serial, platform, username, status, note, last_warmup_at
-             FROM accounts WHERE serial = ?1 ORDER BY platform, username COLLATE NOCASE",
+             FROM accounts WHERE ?1 IS NULL OR serial = ?1
+             ORDER BY platform, username COLLATE NOCASE",
         )?;
         let rows = stmt.query_map([serial], |r| {
             Ok(Account {
@@ -232,4 +234,27 @@ fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
         tx.commit()?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lists_accounts_for_one_phone_or_all() {
+        let path = std::env::temp_dir().join(format!("sma-test-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let db = Db::open(&path).unwrap();
+        db.upsert_account("A", "tiktok", "one", AccountEvent::Seen).unwrap();
+        db.upsert_account("B", "tiktok", "two", AccountEvent::WarmedUp).unwrap();
+
+        assert_eq!(db.accounts(None).unwrap().len(), 2);
+        let b = db.accounts(Some("B")).unwrap();
+        assert_eq!(b.len(), 1);
+        assert_eq!(b[0].username, "two");
+        assert!(b[0].last_warmup_at.is_some());
+
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
 }

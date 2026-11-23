@@ -29,6 +29,19 @@ pub fn adb_path() -> PathBuf {
     "adb".into()
 }
 
+/// Runs `adb -s <serial> <args>`; stdout+stderr, trimmed. Err when adb exits non-zero.
+pub fn run(serial: &str, args: &[&str]) -> Result<String, String> {
+    let out = Command::new(adb_path())
+        .arg("-s")
+        .arg(serial)
+        .args(args)
+        .output()
+        .map_err(|e| format!("Could not run adb: {e}"))?;
+    let mut text = String::from_utf8_lossy(&out.stdout).into_owned();
+    text.push_str(&String::from_utf8_lossy(&out.stderr));
+    if out.status.success() { Ok(text.trim().to_string()) } else { Err(text.trim().to_string()) }
+}
+
 pub fn list() -> Result<Vec<AdbDevice>, String> {
     let out = Command::new(adb_path())
         .args(["devices", "-l"])

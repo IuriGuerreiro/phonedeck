@@ -194,6 +194,11 @@ fn handle_message(app: &AppHandle, status: &Mutex<WorkerStatus>, pending: &Pendi
             set_status(app, status, WorkerStatus::Failed { error });
         }
         Some("progress") => {
+            if let (Some(serial), Some(message), Some(live)) =
+                (msg["serial"].as_str(), msg["message"].as_str(), app.try_state::<crate::live::Live>())
+            {
+                live.progress(serial, message);
+            }
             let _ = app.emit("job-progress", msg);
         }
         Some(other) => eprintln!("[worker] unknown event {other}"),

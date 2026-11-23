@@ -1,6 +1,5 @@
 // Typed wrappers around the Tauri (Rust) commands in src-tauri/src/lib.rs.
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke, listen } from "@/lib/bridge";
 
 export type Device = {
   serial: string;
@@ -62,6 +61,39 @@ export type Account = {
 
 export type JobProgress = { serial: string; message: string };
 
+/** Live numbers read from the phone over adb. Fields are null when the phone didn't report them. */
+export type DeviceStats = {
+  battery: number | null;
+  charging: boolean;
+  /** °C */
+  batteryTemp: number | null;
+  storageUsedBytes: number | null;
+  storageTotalBytes: number | null;
+  ramTotalBytes: number | null;
+  /** e.g. "1080x2400" */
+  screen: string | null;
+};
+
+/** The job a phone is running right now. */
+export type LiveJob = {
+  serial: string;
+  runId: number;
+  action: string;
+  username: string | null;
+  /** ms since epoch */
+  startedAt: number;
+  progress: string | null;
+};
+
+/** Browser access to this app (see src-tauri/src/web.rs). */
+export type WebInfo = {
+  enabled: boolean;
+  port: number;
+  token: string;
+  urls: string[];
+  error: string | null;
+};
+
 export const api = {
   listDevices: () => invoke<Device[]>("list_devices"),
   renameDevice: (serial: string, name: string) => invoke<void>("rename_device", { serial, name }),
@@ -71,8 +103,15 @@ export const api = {
   stopJob: (serial: string) => invoke<void>("stop_job", { serial }),
   /** Opens a live, view-only window of the phone's screen (scrcpy). */
   viewPhone: (serial: string, title: string) => invoke<void>("view_phone", { serial, title }),
-  listAccounts: (serial: string) => invoke<Account[]>("list_accounts", { serial }),
+  /** Accounts on one phone, or on every phone when `serial` is omitted. */
+  listAccounts: (serial?: string) => invoke<Account[]>("list_accounts", { serial: serial ?? null }),
   deleteAccount: (id: number) => invoke<void>("delete_account", { id }),
+  deviceStats: (serial: string) => invoke<DeviceStats>("device_stats", { serial }),
+  /** PNG bytes of the phone's screen. Empty when the screen is off. */
+  screenshot: (serial: string) => invoke<ArrayBuffer>("screenshot", { serial }),
+  wakeScreen: (serial: string) => invoke<void>("wake_screen", { serial }),
+  webInfo: () => invoke<WebInfo>("web_info"),
+  liveJobs: () => invoke<LiveJob[]>("live_jobs"),
   recentRuns: (limit = 50) => invoke<JobRun[]>("recent_runs", { limit }),
   onJobProgress: (cb: (p: JobProgress) => void) =>
     listen<JobProgress>("job-progress", (e) => cb(e.payload)),

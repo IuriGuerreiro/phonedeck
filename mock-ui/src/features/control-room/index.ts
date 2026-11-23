@@ -8,7 +8,7 @@ export const feature: Feature = {
   label: "Control room",
   icon: LayoutGrid,
   group: "Manage",
-  status: "draft",
+  status: "shipped",
   page: lazy(() => import("./Page")),
   wide: true,
 };
