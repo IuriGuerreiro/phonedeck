@@ -79,6 +79,7 @@ function Shell() {
               >
                 <f.icon className="size-4 shrink-0" />
                 <span className="flex-1 truncate">{f.label}</span>
+                {f.useCount && <CountBadge useCount={f.useCount} />}
                 <Badge variant={STATUS_BADGE[f.status]}>{f.status}</Badge>
               </a>
             ))}
@@ -108,4 +109,12 @@ function Shell() {
       <Toaster />
     </div>
   );
+}
+
+/** Calls the feature's count hook in its own component so hooks stay in a stable order. */
+function CountBadge({ useCount }: { useCount: () => number }) {
+  const n = useCount();
+  return n > 0 ? (
+    <span className="rounded-full bg-[#d03b3b] px-1.5 text-[10px] font-semibold text-white tabular-nums">{n}</span>
+  ) : null;
 }

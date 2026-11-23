@@ -18,13 +18,35 @@ import { timeAgo } from "@/lib/mock";
 import { deviceLabel, devicesApi, type Device } from "@/mocks/devices";
 import { useSettings } from "@/settings/SettingsContext";
 import { toOptions, useWarmupSettings } from "@/settings/warmup/store";
+import { useGroups } from "@/mocks/groups";
+import { AccountDetail } from "./AccountDetail";
+import { accountHealth } from "./health";
+import { HealthBadge } from "./HealthBadge";
 import { accountsApi, type Account } from "./mock";
 
+/** "#accounts/<id>" opens that account's detail view. */
+const idFromHash = () => Number(window.location.hash.split("/")[1]) || null;
+
 export default function AccountsPage() {
+  const [id, setId] = useState(idFromHash);
+
+  useEffect(() => {
+    const onHash = () => setId(idFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  return id ? <AccountDetail id={id} /> : <AccountList />;
+}
+
+function AccountList() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   /** null = all phones. */
   const [deviceFilter, setDeviceFilter] = useState<string | null>(null);
+  /** null = all groups. */
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const groups = useGroups();
   const [running, setRunning] = useState<string | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const warmup = toOptions(useWarmupSettings());
@@ -39,7 +61,10 @@ export default function AccountsPage() {
 
   useEffect(refresh, [refresh]);
 
-  const visible = accounts.filter((a) => deviceFilter === null || a.serial === deviceFilter);
+  const visible = accounts.filter(
+    (a) => (deviceFilter === null || a.serial === deviceFilter) && (groupFilter === null || a.groups.includes(groupFilter)),
+  );
+  const activeGroup = groupFilter ? groups.find((g) => g.id === groupFilter) : undefined;
   const device = (serial: string) => devices.find((d) => d.serial === serial);
   const isReady = (a: Account) => device(a.serial)?.state === "device";
 
@@ -112,10 +137,22 @@ export default function AccountsPage() {
             ))}
           </div>
           <Button disabled={!idle || !visible.some((a) => a.status === "ok" && isReady(a))} onClick={warmUpAll}>
-            <Flame /> Warm up all{deviceFilter ? " on this phone" : ""}
+            <Flame /> Warm up {visible.length === accounts.length ? "all" : "shown"}
           </Button>
         </div>
+        <div className="flex flex-wrap items-center gap-1">
+          <span className="mr-1 text-xs text-muted-foreground">Group</span>
+          <FilterChip active={groupFilter === null} onClick={() => setGroupFilter(null)}>
+            Any
+          </FilterChip>
+          {groups.map((g) => (
+            <FilterChip key={g.id} active={groupFilter === g.id} onClick={() => setGroupFilter(g.id)}>
+              {g.name} ({accounts.filter((a) => a.groups.includes(g.id)).length})
+            </FilterChip>
+          ))}
+        </div>
         <p className="text-xs text-muted-foreground">
+          {activeGroup?.keywords.length ? `${activeGroup.name} keywords: ${activeGroup.keywords.join(", ")}. ` : ""}
           Warm-up: {warmup.minutes} min per account, {warmup.watchMinSec}–{warmup.watchMaxSec}s per video,{" "}
           {Math.round(warmup.likeChance * 100)}% likes, {Math.round(warmup.followChance * 100)}% follows,{" "}
           {warmup.keywords.length ? `keywords: ${warmup.keywords.join(", ")}` : "For You feed"}.
@@ -143,6 +180,8 @@ export default function AccountsPage() {
               <TableRow>
                 <TableHead>Account</TableHead>
                 <TableHead>Phone</TableHead>
+                <TableHead>Groups</TableHead>
+                <TableHead>Health</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last warm-up</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -154,10 +193,26 @@ export default function AccountsPage() {
                 const canAct = idle && isReady(a);
                 return (
                   <TableRow key={a.id}>
-                    <TableCell className="font-medium">@{a.username}</TableCell>
+                    <TableCell className="font-medium">
+                      <a href={`#accounts/${a.id}`} className="underline-offset-4 hover:underline">
+                        @{a.username}
+                      </a>
+                    </TableCell>
                     <TableCell className="text-muted-foreground">
                       {d ? deviceLabel(d) : a.serial}
                       {d && d.state !== "device" && <span className="ml-1 text-xs">(not ready)</span>}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {a.groups.map((gid) => (
+                          <Badge key={gid} variant="outline">
+                            {groups.find((g) => g.id === gid)?.name ?? gid}
+                          </Badge>
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <HealthBadge health={accountHealth(a)} />
                     </TableCell>
                     <TableCell className="max-w-56">
                       {a.status === "ok" ? (
