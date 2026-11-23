@@ -1,11 +1,12 @@
 import { Suspense, useEffect, useState } from "react";
-import { RotateCcw, Settings, Smartphone } from "lucide-react";
+import { Moon, RotateCcw, Settings, Smartphone, Sun } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { features, type Feature, type FeatureStatus } from "@/features";
+import { setTheme, useResolvedTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { SettingsProvider, useSettings } from "@/settings/SettingsContext";
 
@@ -35,6 +36,7 @@ export default function App() {
 
 function Shell() {
   const { openSettings } = useSettings();
+  const theme = useResolvedTheme();
   // The open page lives in the URL hash so a reload stays on it.
   const [id, setId] = useState(currentHash);
   // Bumped by Reset to remount the page with fresh state.
@@ -85,12 +87,22 @@ function Shell() {
             ))}
           </nav>
         ))}
-        <button
-          onClick={() => openSettings()}
-          className="mt-auto flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
-        >
-          <Settings className="size-4" /> Settings
-        </button>
+        <div className="mt-auto flex items-center gap-1">
+          <button
+            onClick={() => openSettings()}
+            className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
+          >
+            <Settings className="size-4" /> Settings
+          </button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <Sun /> : <Moon />}
+          </Button>
+        </div>
       </aside>
       <main className="min-w-0 flex-1 p-6">
         <div className={cn("mx-auto flex flex-col gap-4", !active.wide && "max-w-5xl")}>
@@ -106,7 +118,7 @@ function Shell() {
           </Suspense>
         </div>
       </main>
-      <Toaster />
+      <Toaster theme={theme} />
     </div>
   );
 }

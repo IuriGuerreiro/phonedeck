@@ -253,7 +253,7 @@ const FRAME_WIDTH: Record<ScreenSize, string> = { sm: "w-40", md: "w-56", lg: "w
 function PhoneFrame({ size, children }: { size: ScreenSize; children: React.ReactNode }) {
   return (
     <div className={cn("flex flex-col items-center gap-2 transition-all", FRAME_WIDTH[size])}>
-      <div className="relative aspect-[9/19.5] w-full overflow-hidden rounded-[2rem] border-[6px] border-neutral-900 bg-black shadow-xl">
+      <div className="relative aspect-[9/19.5] w-full overflow-hidden rounded-[2rem] border-[6px] border-neutral-900 bg-black shadow-xl dark:border-neutral-700">
         <div className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-4 pt-1.5 text-[9px] font-medium text-white">
           <span>{new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
           <span className="absolute top-1.5 left-1/2 size-2 -translate-x-1/2 rounded-full bg-neutral-900" />
