@@ -1,6 +1,6 @@
 // Every phone plugged into this PC.
 import { useCallback, useEffect, useState } from "react";
-import { BatteryMedium, Check, Pencil, RefreshCw, ShieldCheck, Smartphone, X } from "lucide-react";
+import { BatteryMedium, ChevronRight, Check, Pencil, RefreshCw, ShieldCheck, Smartphone, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,8 +9,24 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DEVICE_STATE, deviceLabel, devicesApi, type Device } from "@/mocks/devices";
 import { accountsApi, type Account } from "../accounts/mock";
+import { DeviceDetail } from "./DeviceDetail";
+
+/** "#devices/<serial>" opens that device's detail view. */
+const serialFromHash = () => decodeURIComponent(window.location.hash.split("/")[1] ?? "") || null;
 
 export default function DevicesPage() {
+  const [serial, setSerial] = useState(serialFromHash);
+
+  useEffect(() => {
+    const onHash = () => setSerial(serialFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  return serial ? <DeviceDetail serial={serial} /> : <DeviceList />;
+}
+
+function DeviceList() {
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
 
@@ -120,6 +136,9 @@ function DeviceCard({ device: d, accountCount, onChange }: { device: Device; acc
             <BatteryMedium className="size-3.5" /> {d.battery}%
           </dd>
         </dl>
+        <Button size="sm" variant="outline" className="self-start" render={<a href={`#devices/${d.serial}`} />}>
+          Details <ChevronRight />
+        </Button>
         {state.hint && (
           <div className="flex flex-col gap-2 rounded-lg border bg-muted/50 p-2 text-xs">
             {state.hint}

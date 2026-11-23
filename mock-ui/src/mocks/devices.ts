@@ -51,3 +51,94 @@ export const devicesApi = {
     devices = seed();
   },
 };
+
+/** Extra info shown on a device's detail view. */
+export type DeviceDetails = {
+  manufacturer: string;
+  connection: "USB" | "Wi-Fi";
+  ipAddress: string | null;
+  screen: string;
+  storageUsedGb: number;
+  storageTotalGb: number;
+  ramGb: number;
+  charging: boolean;
+  helpersInstalled: boolean;
+  tiktokVersion: string | null;
+  connectedSince: string;
+  activity: { at: string; action: string; result: "ok" | "error"; note?: string }[];
+};
+
+const minsAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+
+const DETAILS: Record<string, DeviceDetails> = {
+  R58N12ABCDE: {
+    manufacturer: "Samsung",
+    connection: "USB",
+    ipAddress: "192.168.1.42",
+    screen: "1080 × 2340",
+    storageUsedGb: 74,
+    storageTotalGb: 128,
+    ramGb: 8,
+    charging: true,
+    helpersInstalled: true,
+    tiktokVersion: "37.4.3",
+    connectedSince: minsAgo(260),
+    activity: [
+      { at: minsAgo(12), action: "Warm-up @fit.with.ana", result: "ok" },
+      { at: minsAgo(25), action: "Switch to @fit.with.ana", result: "ok" },
+      { at: minsAgo(40), action: "Warm-up @daily.stretch", result: "error", note: "Captcha shown" },
+      { at: minsAgo(180), action: "Find logged-in accounts", result: "ok" },
+    ],
+  },
+  "1A2B3C4D5E": {
+    manufacturer: "Xiaomi",
+    connection: "USB",
+    ipAddress: "192.168.1.57",
+    screen: "1080 × 2400",
+    storageUsedGb: 101,
+    storageTotalGb: 128,
+    ramGb: 6,
+    charging: false,
+    helpersInstalled: true,
+    tiktokVersion: "37.2.0",
+    connectedSince: minsAgo(1500),
+    activity: [
+      { at: minsAgo(300), action: "Warm-up @home.cooking.hq", result: "ok" },
+      { at: minsAgo(420), action: "Open TikTok", result: "ok" },
+    ],
+  },
+  ZY22H7KLMN: {
+    manufacturer: "Google",
+    connection: "USB",
+    ipAddress: null,
+    screen: "1080 × 2400",
+    storageUsedGb: 39,
+    storageTotalGb: 128,
+    ramGb: 6,
+    charging: false,
+    helpersInstalled: false,
+    tiktokVersion: null,
+    connectedSince: minsAgo(3),
+    activity: [],
+  },
+};
+
+export async function getDeviceDetails(serial: string): Promise<DeviceDetails | null> {
+  await delay(300);
+  return DETAILS[serial] ?? null;
+}
+
+/** What the phone is doing right now, for the fake screen mirror. */
+export type LiveTask =
+  | { kind: "warmup"; account: string; keywords: string[] }
+  | { kind: "idle" }
+  | { kind: "no_screen"; reason: string };
+
+const LIVE: Record<string, LiveTask> = {
+  R58N12ABCDE: { kind: "warmup", account: "fit.with.ana", keywords: ["gym workout", "meal prep"] },
+  "1A2B3C4D5E": { kind: "idle" },
+  ZY22H7KLMN: { kind: "no_screen", reason: "Not allowed yet. Accept the USB debugging prompt on the phone." },
+};
+
+export const getLiveTask = (serial: string): LiveTask =>
+  LIVE[serial] ?? { kind: "no_screen", reason: "Phone not connected." };

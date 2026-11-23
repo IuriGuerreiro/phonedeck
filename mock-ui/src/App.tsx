@@ -15,7 +15,8 @@ const STATUS_BADGE: Record<FeatureStatus, "default" | "secondary" | "outline"> =
   shipped: "secondary",
 };
 
-const currentHash = () => window.location.hash.slice(1);
+/** Feature id from the hash. "#devices/R58N" opens "devices"; the page reads the rest. */
+const currentHash = () => window.location.hash.slice(1).split("/")[0];
 
 /** Features grouped by `group`, keeping registry order. */
 function groupFeatures(list: Feature[]) {
