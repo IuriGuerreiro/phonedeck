@@ -10,6 +10,7 @@ export const feature: Feature = {
   icon: Smartphone,
   group: "Phones",
   status: "draft",
+  wide: true,
   page: lazy(() => import("./Page")),
   reset: devicesApi.reset,
 };
