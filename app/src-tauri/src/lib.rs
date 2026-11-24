@@ -99,6 +99,7 @@ async fn run_job(
         _ => return Err("job must be an object".into()),
     };
     let action = job.get("action").and_then(Value::as_str).ok_or("job.action is required")?.to_string();
+    db.apply_group_keywords(&serial, &mut job)?;
     job.insert("serial".into(), Value::String(serial.clone()));
     let job = Value::Object(job);
 
@@ -124,6 +125,22 @@ async fn run_job(
 async fn stop_job(worker: State<'_, Worker>, serial: String) -> CmdResult<()> {
     let job = serde_json::json!({ "action": "stop", "serial": serial });
     worker.run(job, Duration::from_secs(10)).await.map(|_| ()).map_err(|e| e.message)
+}
+
+#[tauri::command(async)]
+fn list_groups(db: State<'_, Db>) -> CmdResult<Vec<db::Group>> { db.groups() }
+
+#[tauri::command(async)]
+fn save_group(db: State<'_, Db>, id: Option<i64>, name: String, keywords: Vec<String>) -> CmdResult<()> {
+    db.save_group(id, &name, keywords)
+}
+
+#[tauri::command(async)]
+fn delete_group(db: State<'_, Db>, id: i64) -> CmdResult<()> { db.delete_group(id) }
+
+#[tauri::command(async)]
+fn set_group_member(db: State<'_, Db>, group_id: i64, account_id: i64, member: bool) -> CmdResult<()> {
+    db.set_group_member(group_id, account_id, member)
 }
 
 /// Accounts on one phone, or on every phone when `serial` is omitted.
@@ -222,6 +239,10 @@ pub fn run() {
             restart_worker,
             run_job,
             stop_job,
+            list_groups,
+            save_group,
+            delete_group,
+            set_group_member,
             list_accounts,
             account_snapshots,
             delete_account,

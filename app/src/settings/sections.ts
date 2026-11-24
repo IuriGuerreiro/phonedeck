@@ -2,7 +2,6 @@ import type { ComponentType } from "react";
 import type { LucideIcon } from "lucide-react";
 import { Flame, Globe, Palette, ShieldCheck, Tags } from "lucide-react";
 
-import { groupsApi } from "@/mocks/groups";
 import { setTheme } from "@/lib/theme";
 import { AppearanceSection } from "./appearance/AppearanceSection";
 import { GroupsSection } from "./groups/GroupsSection";
@@ -48,8 +47,6 @@ export const settingsSections: SettingsSectionDef[] = [
     icon: Tags,
     group: "Automation",
     component: GroupsSection,
-    preview: true,
-    restoreDefaults: groupsApi.reset,
   },
   {
     id: "safety",

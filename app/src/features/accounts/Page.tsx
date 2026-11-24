@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { accountsApi, type Account } from "@/data/accounts";
 import { deviceLabel, devicesApi, isReady, type Device } from "@/data/devices";
+import { useGroups } from "@/data/groups";
 import { timeAgo } from "@/lib/time";
 import { useSettings } from "@/settings/SettingsContext";
 import { toOptions, useWarmupSettings } from "@/settings/warmup/store";
@@ -37,6 +38,8 @@ function AccountList() {
   const [devices, setDevices] = useState<Device[]>([]);
   /** null = all phones. */
   const [deviceFilter, setDeviceFilter] = useState<string | null>(null);
+  const { groups, error: groupsError } = useGroups();
+  const [groupFilter, setGroupFilter] = useState<number | null>(null);
   const warmup = toOptions(useWarmupSettings());
   const { openSettings } = useSettings();
   // Set by Stop so "Warm up all" doesn't start the next account.
@@ -50,7 +53,7 @@ function AccountList() {
   useEffect(refresh, [refresh]);
 
   const job = useJobRunner(refresh);
-  const visible = accounts.filter((a) => deviceFilter === null || a.serial === deviceFilter);
+  const visible = accounts.filter((a) => (deviceFilter === null || a.serial === deviceFilter) && (groupFilter === null || groups.some((g) => g.id === groupFilter && g.accountIds.includes(a.id))));
   const device = (serial: string) => devices.find((d) => d.serial === serial);
   const canWarm = (a: Account) => a.status === "ok" && isReady(device(a.serial));
 
@@ -113,10 +116,16 @@ function AccountList() {
             <Flame /> Warm up {visible.length === accounts.length ? "all" : "shown"}
           </Button>
         </div>
+        <div className="flex flex-wrap gap-1" aria-label="Filter by group">
+          <FilterChip active={groupFilter === null} onClick={() => setGroupFilter(null)}>All groups</FilterChip>
+          {groups.map((g) => <FilterChip key={g.id} active={groupFilter === g.id} onClick={() => setGroupFilter(g.id)}>{g.name} ({g.accountIds.length})</FilterChip>)}
+          <Button size="sm" variant="ghost" onClick={() => openSettings("groups")}>Manage groups</Button>
+        </div>
+        {groupsError && <p role="alert" className="text-sm text-destructive">{groupsError}</p>}
         <p className="text-xs text-muted-foreground">
           {warmup.minutes}m / account · {warmup.watchMinSec}–{warmup.watchMaxSec}s watch ·{" "}
           {Math.round(warmup.likeChance * 100)}% like · {Math.round(warmup.followChance * 100)}% follow ·{" "}
-          {warmup.keywords.length ? warmup.keywords.join(", ") : "For You"}
+          {warmup.keywords.length ? warmup.keywords.join(", ") : "For You"} · Group keywords override these defaults
         </p>
 
         {job.running && (
@@ -133,7 +142,7 @@ function AccountList() {
 
         {visible.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No accounts yet. Log in to TikTok on a phone, then use “Sync accounts”.
+            {accounts.length ? "No accounts match these filters." : "No accounts yet. Log in to TikTok on a phone, then use Sync accounts."}
           </p>
         ) : (
           <Table>
@@ -141,6 +150,7 @@ function AccountList() {
               <TableRow>
                 <TableHead>Account</TableHead>
                 <TableHead>Device</TableHead>
+                <TableHead>Groups</TableHead>
                 <TableHead>Health</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last warm-up</TableHead>
@@ -162,6 +172,7 @@ function AccountList() {
                       {d ? deviceLabel(d) : a.serial}
                       {!isReady(d) && <span className="ml-1 text-xs">(offline)</span>}
                     </TableCell>
+                    <TableCell>{groups.filter((g) => g.accountIds.includes(a.id)).map((g) => g.name).join(", ") || "None"}</TableCell>
                     <TableCell>
                       <HealthBadge health={accountHealth(a)} />
                     </TableCell>

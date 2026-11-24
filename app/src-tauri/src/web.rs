@@ -221,6 +221,19 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
         "run_job" => to_json(crate::run_job(app.state(), app.state(), app.state(), arg(&a, "serial")?, arg(&a, "job")?).await),
         "stop_job" => to_json(crate::stop_job(app.state(), arg(&a, "serial")?).await),
         "account_snapshots" => to_json(blocking(app, |x| crate::account_snapshots(x.state())).await?),
+        "list_groups" => to_json(blocking(app, |x| crate::list_groups(x.state())).await?),
+        "save_group" => {
+            let (id, name, keywords) = (arg(&a, "id")?, arg(&a, "name")?, arg(&a, "keywords")?);
+            to_json(blocking(app, move |x| crate::save_group(x.state(), id, name, keywords)).await?)
+        }
+        "delete_group" => {
+            let id = arg(&a, "id")?;
+            to_json(blocking(app, move |x| crate::delete_group(x.state(), id)).await?)
+        }
+        "set_group_member" => {
+            let (group_id, account_id, member) = (arg(&a, "groupId")?, arg(&a, "accountId")?, arg(&a, "member")?);
+            to_json(blocking(app, move |x| crate::set_group_member(x.state(), group_id, account_id, member)).await?)
+        }
         "list_accounts" => {
             let serial: Option<String> = arg(&a, "serial")?;
             to_json(blocking(app, move |x| crate::list_accounts(x.state(), serial)).await?)

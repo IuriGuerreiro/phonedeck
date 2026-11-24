@@ -14,6 +14,15 @@ pub struct AccountSnapshot {
     pub likes: i64,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Group {
+    pub id: i64,
+    pub name: String,
+    pub keywords: Vec<String>,
+    pub account_ids: Vec<i64>,
+}
+
 pub struct Db(Mutex<Connection>);
 
 /// Each entry runs once, in order. Append new migrations; never edit old ones.
@@ -59,6 +68,17 @@ const MIGRATIONS: &[&str] = &[r#"
         likes INTEGER NOT NULL CHECK(likes >= 0)
     );
     CREATE INDEX account_snapshots_account ON account_snapshots(account_id, id);
+"#, r#"
+    CREATE TABLE account_groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL COLLATE NOCASE UNIQUE CHECK(length(trim(name)) > 0),
+        keywords TEXT NOT NULL DEFAULT '[]'
+    );
+    CREATE TABLE account_group_members (
+        group_id INTEGER NOT NULL REFERENCES account_groups(id) ON DELETE CASCADE,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        PRIMARY KEY(group_id, account_id)
+    );
 "#];
 
 #[derive(Serialize)]
@@ -106,6 +126,7 @@ impl Db {
         // Wait for a lock instead of failing, e.g. while a previous instance is closing.
         conn.busy_timeout(std::time::Duration::from_secs(15))?;
         conn.pragma_update(None, "journal_mode", "WAL")?;
+        conn.pragma_update(None, "foreign_keys", true)?;
         migrate(&mut conn)?;
         // Runs left 'running' by a crash or forced quit can never finish now.
         conn.execute(
@@ -119,6 +140,69 @@ impl Db {
     fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
         // A panic while holding the lock leaves the connection usable; keep going.
         self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    pub fn groups(&self) -> Result<Vec<Group>, String> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT id, name, keywords FROM account_groups ORDER BY id").map_err(|e| e.to_string())?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?, r.get::<_, String>(2)?))).map_err(|e| e.to_string())?;
+        let mut groups = Vec::new();
+        for row in rows {
+            let (id, name, keywords) = row.map_err(|e| e.to_string())?;
+            let mut members = conn.prepare("SELECT account_id FROM account_group_members WHERE group_id = ?1 ORDER BY account_id").map_err(|e| e.to_string())?;
+            let account_ids = members.query_map([id], |r| r.get(0)).map_err(|e| e.to_string())?.collect::<rusqlite::Result<Vec<i64>>>().map_err(|e| e.to_string())?;
+            groups.push(Group { id, name, keywords: serde_json::from_str(&keywords).map_err(|e| e.to_string())?, account_ids });
+        }
+        Ok(groups)
+    }
+
+    pub fn save_group(&self, id: Option<i64>, name: &str, keywords: Vec<String>) -> Result<(), String> {
+        let name = name.trim();
+        if name.is_empty() { return Err("Group name is required".into()); }
+        let mut clean = Vec::new();
+        for word in keywords {
+            let word = word.trim();
+            if !word.is_empty() && !clean.iter().any(|k: &String| k.eq_ignore_ascii_case(word)) { clean.push(word.to_string()); }
+        }
+        let keywords = serde_json::to_string(&clean).map_err(|e| e.to_string())?;
+        let conn = self.conn();
+        let result = match id {
+            Some(id) => conn.execute("UPDATE account_groups SET name = ?2, keywords = ?3 WHERE id = ?1", params![id, name, keywords]),
+            None => conn.execute("INSERT INTO account_groups(name, keywords) VALUES (?1, ?2)", params![name, keywords]),
+        }.map_err(|e| if matches!(e, rusqlite::Error::SqliteFailure(ref code, _) if code.extended_code == 2067) { "A group with this name already exists".into() } else { e.to_string() })?;
+        if result == 0 { return Err("Group no longer exists".into()); }
+        Ok(())
+    }
+
+    pub fn delete_group(&self, id: i64) -> Result<(), String> {
+        self.conn().execute("DELETE FROM account_groups WHERE id = ?1", [id]).map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn set_group_member(&self, group_id: i64, account_id: i64, member: bool) -> Result<(), String> {
+        let conn = self.conn();
+        if member {
+            conn.execute("INSERT OR IGNORE INTO account_group_members(group_id, account_id) VALUES (?1, ?2)", params![group_id, account_id])
+        } else {
+            conn.execute("DELETE FROM account_group_members WHERE group_id = ?1 AND account_id = ?2", params![group_id, account_id])
+        }.map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    pub fn apply_group_keywords(&self, serial: &str, job: &mut serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
+        if job.get("action").and_then(|v| v.as_str()) != Some("warmup") { return Ok(()); }
+        let Some(username) = job.get("username").and_then(|v| v.as_str()) else { return Ok(()); };
+        let platform = job.get("platform").and_then(|v| v.as_str()).unwrap_or("");
+        let accounts = self.accounts(Some(serial)).map_err(|e| e.to_string())?;
+        let Some(account) = accounts.iter().find(|a| a.username == username && a.platform == platform) else { return Ok(()); };
+        let mut keywords = Vec::new();
+        for group in self.groups()?.into_iter().filter(|g| g.account_ids.contains(&account.id)) {
+            for word in group.keywords {
+                if !keywords.iter().any(|k: &String| k.eq_ignore_ascii_case(&word)) { keywords.push(word); }
+            }
+        }
+        if !keywords.is_empty() { job.insert("keywords".into(), serde_json::json!(keywords)); }
+        Ok(())
     }
 
     pub fn touch_device(&self, serial: &str, model: Option<&str>) -> rusqlite::Result<()> {
@@ -273,6 +357,64 @@ fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn groups_persist_and_apply_only_to_assigned_accounts() {
+        let path = std::env::temp_dir().join(format!("sma-groups-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let db = Db::open(&path).unwrap();
+        db.upsert_account("A", "tiktok", "one", AccountEvent::Seen).unwrap();
+        db.upsert_account("B", "tiktok", "one", AccountEvent::Seen).unwrap();
+        let id = db.accounts(Some("A")).unwrap()[0].id;
+        db.save_group(None, " Gym ", vec![" fitness ".into(), "FITNESS".into(), "".into()]).unwrap();
+        db.save_group(None, "Food", vec!["fitness".into(), "recipes".into()]).unwrap();
+        let groups = db.groups().unwrap();
+        assert_eq!(groups[0].name, "Gym");
+        assert_eq!(groups[0].keywords, vec!["fitness"]);
+        assert!(db.save_group(None, "gym", vec![]).is_err());
+        assert!(db.save_group(None, "   ", vec![]).is_err());
+        for g in &groups { db.set_group_member(g.id, id, true).unwrap(); }
+        db.set_group_member(groups[0].id, id, true).unwrap();
+        db.upsert_account("A", "tiktok", "one", AccountEvent::Seen).unwrap();
+        drop(db);
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.groups().unwrap()[0].account_ids, vec![id]);
+        let make_job = || serde_json::json!({"action":"warmup", "platform":"tiktok", "username":"one", "keywords":["global"]}).as_object().unwrap().clone();
+        let mut job = make_job();
+        db.apply_group_keywords("A", &mut job).unwrap();
+        assert_eq!(job["keywords"], serde_json::json!(["fitness", "recipes"]));
+        let mut other_phone = make_job();
+        db.apply_group_keywords("B", &mut other_phone).unwrap();
+        assert_eq!(other_phone["keywords"], serde_json::json!(["global"]));
+        db.save_group(Some(groups[0].id), "Renamed", vec![]).unwrap();
+        db.delete_group(groups[1].id).unwrap();
+        let mut fallback = make_job();
+        db.apply_group_keywords("A", &mut fallback).unwrap();
+        assert_eq!(fallback["keywords"], serde_json::json!(["global"]));
+        assert_eq!(db.accounts(None).unwrap().len(), 2);
+        db.set_group_member(groups[0].id, id, false).unwrap();
+        assert!(db.groups().unwrap()[0].account_ids.is_empty());
+        assert!(db.set_group_member(groups[1].id, id, true).is_err());
+        db.set_group_member(groups[0].id, id, true).unwrap();
+        db.delete_account(id).unwrap();
+        assert!(db.groups().unwrap()[0].account_ids.is_empty());
+        drop(db);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn groups_migration_preserves_existing_accounts() {
+        let mut conn = Connection::open_in_memory().unwrap();
+        for sql in &MIGRATIONS[..3] { conn.execute_batch(sql).unwrap(); }
+        conn.pragma_update(None, "user_version", 3).unwrap();
+        conn.execute("INSERT INTO accounts(serial, platform, username) VALUES ('A','tiktok','existing')", []).unwrap();
+        migrate(&mut conn).unwrap();
+        migrate(&mut conn).unwrap();
+        let count: i64 = conn.query_row("SELECT count(*) FROM accounts", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 1);
+        let count: i64 = conn.query_row("SELECT count(*) FROM account_groups", [], |r| r.get(0)).unwrap();
+        assert_eq!(count, 0);
+    }
 
     #[test]
     fn snapshots_persist_and_belong_to_the_account() {

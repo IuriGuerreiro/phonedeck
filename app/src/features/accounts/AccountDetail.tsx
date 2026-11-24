@@ -1,5 +1,5 @@
 // One account: health, status and actions.
-// Groups, notes and history charts arrive with the next phases (they need new tables).
+
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, ArrowLeftRight, Flame, Smartphone, Square } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { accountsApi, type Account } from "@/data/accounts";
 import { deviceLabel, devicesApi, isReady, type Device } from "@/data/devices";
+import { api } from "@/api";
+import { useGroups } from "@/data/groups";
+import { useSettings } from "@/settings/SettingsContext";
 import { timeAgo } from "@/lib/time";
 import { toOptions, useWarmupSettings } from "@/settings/warmup/store";
 import { accountHealth } from "./health";
@@ -17,6 +20,9 @@ import { useJobRunner } from "./useJobRunner";
 export function AccountDetail({ id }: { id: number }) {
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
   const [device, setDevice] = useState<Device | null>(null);
+  const { groups, error: groupsError, reload: reloadGroups } = useGroups();
+  const { openSettings } = useSettings();
+  const [savingGroup, setSavingGroup] = useState(false);
   const warmup = toOptions(useWarmupSettings());
 
   const load = useCallback(async () => {
@@ -79,6 +85,23 @@ export function AccountDetail({ id }: { id: number }) {
         <HealthBadge health={health} className="text-base" />
       </div>
 
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between"><CardTitle>Groups</CardTitle><Button size="sm" variant="ghost" onClick={() => openSettings("groups")}>Manage groups</Button></CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {groupsError && <p role="alert" className="text-sm text-destructive">{groupsError}</p>}
+          {!groups.length && <p className="text-sm text-muted-foreground">Create a group in Settings to organize this account.</p>}
+          <div className="flex flex-wrap gap-3">{groups.map((g) => <label key={g.id} className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={g.accountIds.includes(account.id)} disabled={savingGroup || !!job.running} onChange={async (e) => {
+              const member = e.target.checked;
+              setSavingGroup(true);
+              try { await api.setGroupMember(g.id, account.id, member); await reloadGroups(); }
+              catch (e) { toast.error(String(e)); }
+              finally { setSavingGroup(false); }
+            }} />{g.name}
+          </label>)}</div>
+          <p className="text-xs text-muted-foreground">Warm-up keywords: {groups.filter((g) => g.accountIds.includes(account.id)).flatMap((g) => g.keywords).join(", ") || warmup.keywords.join(", ") || "For You"}</p>
+        </CardContent>
+      </Card>
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -119,14 +142,14 @@ export function AccountDetail({ id }: { id: number }) {
             </p>
             <div className="flex flex-wrap gap-2">
               <Button
-                disabled={!canAct}
+                disabled={!canAct || savingGroup}
                 onClick={() => job.run(`Warm-up: @${account.username}`, account.serial, () => accountsApi.warmUp(account, warmup))}
               >
                 <Flame /> Warm up now
               </Button>
               <Button
                 variant="outline"
-                disabled={!canAct}
+                disabled={!canAct || savingGroup}
                 onClick={() => job.run(`Switching to @${account.username}`, account.serial, () => accountsApi.switchTo(account))}
               >
                 <ArrowLeftRight /> Switch to

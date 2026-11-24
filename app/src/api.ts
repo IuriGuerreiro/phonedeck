@@ -27,6 +27,8 @@ export type JobRun = {
 /** Platforms with account automation. Only TikTok for now. */
 export type PlatformId = "tiktok";
 
+export type Group = { id: number; name: string; keywords: string[]; accountIds: number[] };
+
 export type AccountSnapshot = { accountId: number; capturedAt: string; followers: number; following: number; likes: number };
 
 export type Job =
@@ -98,6 +100,10 @@ export type WebInfo = {
 };
 
 export const api = {
+  listGroups: () => invoke<Group[]>("list_groups"),
+  saveGroup: (group: { id: number | null; name: string; keywords: string[] }) => invoke<void>("save_group", group),
+  deleteGroup: (id: number) => invoke<void>("delete_group", { id }),
+  setGroupMember: (groupId: number, accountId: number, member: boolean) => invoke<void>("set_group_member", { groupId, accountId, member }),
   accountSnapshots: () => invoke<AccountSnapshot[]>("account_snapshots"),
   listDevices: () => invoke<Device[]>("list_devices"),
   renameDevice: (serial: string, name: string) => invoke<void>("rename_device", { serial, name }),
