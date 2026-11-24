@@ -1,8 +1,11 @@
+mod posting;
+mod video_analytics;
 mod adb;
 mod db;
 mod live;
 mod mirror;
 mod safety;
+mod alerts;
 mod scheduler;
 mod setup;
 mod stats;
@@ -104,6 +107,7 @@ pub(crate) async fn execute_job(app: &AppHandle, serial: String, job: Value) -> 
         _ => return Err("job must be an object".into()),
     };
     let action = job.get("action").and_then(Value::as_str).ok_or("job.action is required")?.to_string();
+    db.check_hold(&serial)?;
     db.apply_group_keywords(&serial, &mut job)?;
     safety::apply(&db, &serial, &mut job)?;
     job.insert("serial".into(), Value::String(serial.clone()));
@@ -113,6 +117,13 @@ pub(crate) async fn execute_job(app: &AppHandle, serial: String, job: Value) -> 
     live.start(&serial, run_id, &action, job["username"].as_str());
     let reply = worker.run(job.clone(), job_timeout(&job)).await;
     live.finish(&serial, run_id);
+    let reply = if action == "video_analytics" {
+        reply.and_then(|result| {
+            video_analytics::record(&db, &serial, &job, &result)
+                .map(|()| result)
+                .map_err(|message| JobError { message, code: None })
+        })
+    } else { reply };
     let outcome = reply.as_ref().map(Value::to_string).map_err(|e| e.message.clone());
     db.finish_run(run_id, &outcome).map_err(err)?;
     record_accounts(&db, &serial, &job, &reply).map_err(err)?;
@@ -236,6 +247,8 @@ fn account_snapshots(db: State<'_, Db>) -> CmdResult<Vec<db::AccountSnapshot>> {
 fn job_timeout(job: &Value) -> Duration {
     let base = 180;
     match job["action"].as_str() {
+        Some("prepare_post") | Some("publish_post") => Duration::from_secs(300),
+        Some("video_analytics") => Duration::from_secs(900),
         Some("warmup") => {
             let minutes = job["minutes"].as_f64().unwrap_or(10.0).clamp(1.0, 120.0);
             Duration::from_secs(base + (minutes * 60.0) as u64)
@@ -292,6 +305,7 @@ pub fn run() {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
             setup::init(&data_dir);
+            app.manage(posting::Media::new(data_dir.join("posting"))?);
             app.manage(Db::open(&data_dir.join("sma.db"))?);
 
             // Before the worker: its progress events update this.
@@ -317,6 +331,10 @@ pub fn run() {
             list_groups,
             get_safety,
             set_safety,
+            alerts::list_alerts,
+            alerts::resolve_alert,
+            alerts::label_alert,
+            alerts::alert_screenshot,
             list_schedules,
             save_schedule,
             delete_schedule,
@@ -332,6 +350,14 @@ pub fn run() {
             set_group_member,
             list_accounts,
             account_snapshots,
+            video_analytics::video_readings,
+            posting::list_posts,
+            posting::create_post,
+            posting::upload_post_chunk,
+            posting::finish_post_upload,
+            posting::delete_post,
+            posting::prepare_post,
+            posting::publish_post,
             delete_account,
             recent_runs,
             setup::setup_status,

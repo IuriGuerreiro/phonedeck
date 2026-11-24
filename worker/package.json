@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/main.ts",
     "typecheck": "tsc",
-    "appium:setup": "APPIUM_HOME=$PWD/.appium appium driver install uiautomator2"
+    "appium:setup": "APPIUM_HOME=$PWD/.appium appium driver install uiautomator2",
+    "test": "node --test test/*.test.ts"
   },
   "dependencies": {
     "appium": "^3.9.1",

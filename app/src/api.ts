@@ -29,11 +29,28 @@ export type PlatformId = "tiktok";
 
 export type Group = { id: number; name: string; keywords: string[]; accountIds: number[] };
 
+export type PostVisibility = "private" | "public";
+export type PostStatus = "uploading" | "draft" | "preparing" | "ready" | "publishing" | "submitted" | "failed" | "uncertain";
+export type Post = { id: number; accountId: number; username: string; serial: string; name: string; caption: string; visibility: PostVisibility; bytes: number; status: PostStatus; error: string | null; createdAt: string };
+
+export type VideoMeasurement = {
+  platformVideoId: string;
+  url: string;
+  caption: string;
+  views: number;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  saves: number | null;
+};
+export type VideoReading = { id: number; accountId: number; capturedAt: string; videos: VideoMeasurement[] };
+
 export type AccountSnapshot = { accountId: number; capturedAt: string; followers: number; following: number; likes: number };
 
 export type Job =
   | { action: "open_app"; package: string }
   | { action: "swipe_up" }
+  | { action: "video_analytics"; platform: PlatformId; username: string }
   | { action: "account_analytics"; platform: PlatformId; username: string }
   | { action: "list_accounts"; platform: PlatformId }
   | { action: "switch_account"; platform: PlatformId; username: string }
@@ -115,6 +132,26 @@ export type SafetyLimits = {
   breakLengthMax: number;
 };
 
+export type AlertKind = "captcha" | "logged_out" | "account_warning" | "popup" | "unknown";
+export type AlertLabel = AlertKind | "false_alarm";
+
+/** A screen that stopped a job. While open, its phone runs nothing. */
+export type Alert = {
+  id: number;
+  /** Best guess. */
+  kind: AlertKind;
+  /** What the user said it was. */
+  label: AlertLabel | null;
+  serial: string;
+  username: string | null;
+  accountId: number | null;
+  action: string;
+  message: string;
+  hasScreenshot: boolean;
+  createdAt: string;
+  resolvedAt: string | null;
+};
+
 /** A timed warm-up for all accounts or one group. */
 export type Schedule = {
   id: number | null;
@@ -155,10 +192,18 @@ export type ScheduleRun = {
 export type Usage = { likes: number; follows: number; minutes: number };
 
 export const api = {
+  listPosts: () => invoke<Post[]>("list_posts"),
+  createPost: (draft: { accountId: number; name: string; caption: string; visibility: PostVisibility; bytes: number }) => invoke<number>("create_post", draft),
+  uploadPostChunk: (id: number, offset: number, data: number[]) => invoke<void>("upload_post_chunk", { id, offset, data }),
+  finishPostUpload: (id: number) => invoke<void>("finish_post_upload", { id }),
+  deletePost: (id: number) => invoke<void>("delete_post", { id }),
+  preparePost: (id: number) => invoke<void>("prepare_post", { id }),
+  publishPost: (id: number) => invoke<void>("publish_post", { id }),
   listGroups: () => invoke<Group[]>("list_groups"),
   saveGroup: (group: { id: number | null; name: string; keywords: string[] }) => invoke<void>("save_group", group),
   deleteGroup: (id: number) => invoke<void>("delete_group", { id }),
   setGroupMember: (groupId: number, accountId: number, member: boolean) => invoke<void>("set_group_member", { groupId, accountId, member }),
+  videoReadings: () => invoke<VideoReading[]>("video_readings"),
   accountSnapshots: () => invoke<AccountSnapshot[]>("account_snapshots"),
   listDevices: () => invoke<Device[]>("list_devices"),
   renameDevice: (serial: string, name: string) => invoke<void>("rename_device", { serial, name }),
@@ -175,6 +220,10 @@ export const api = {
   /** PNG bytes of the phone's screen. Empty when the screen is off. */
   screenshot: (serial: string) => invoke<ArrayBuffer>("screenshot", { serial }),
   wakeScreen: (serial: string) => invoke<void>("wake_screen", { serial }),
+  listAlerts: () => invoke<Alert[]>("list_alerts"),
+  resolveAlert: (id: number) => invoke<void>("resolve_alert", { id }),
+  labelAlert: (id: number, label: AlertLabel) => invoke<void>("label_alert", { id, label }),
+  alertScreenshot: (id: number) => invoke<ArrayBuffer>("alert_screenshot", { id }),
   listSchedules: () => invoke<Schedule[]>("list_schedules"),
   saveSchedule: (schedule: Schedule) => invoke<Schedule>("save_schedule", { schedule }),
   deleteSchedule: (id: number) => invoke<void>("delete_schedule", { id }),

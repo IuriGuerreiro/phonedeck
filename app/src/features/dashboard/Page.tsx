@@ -7,11 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { timeAgo } from "@/lib/mock";
 import { cn } from "@/lib/utils";
-import { useAlerts } from "@/mocks/alerts";
+import { useAlerts } from "@/data/alerts";
 import { devicesApi, type Device } from "@/mocks/devices";
 import { useSettings } from "@/settings/SettingsContext";
 import { inQuietHours, useSafety } from "@/settings/safety/store";
-import { ALERT_KIND } from "../alerts/Page";
+import { ALERT_KIND, alertTitle } from "../alerts/kinds";
 import { accountHealth } from "../accounts/health";
 import { HealthBadge } from "../accounts/HealthBadge";
 import { accountsApi, type Account, type DayStat } from "@/mocks/accounts";
@@ -24,7 +24,7 @@ export default function DashboardPage() {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [week, setWeek] = useState<{ label: string; value: number }[]>([]);
   const [now, setNow] = useState(() => new Date());
-  const alerts = useAlerts();
+  const { alerts } = useAlerts();
   const safety = useSafety();
   const { openSettings } = useSettings();
 
@@ -47,8 +47,8 @@ export default function DashboardPage() {
 
   const online = devices.filter((d) => d.state === "device").length;
   const warmedToday = accounts.filter((a) => a.lastWarmupAt && isToday(a.lastWarmupAt)).length;
-  const openAlerts = alerts.filter((a) => !a.solvedAt);
-  const errorsToday = alerts.filter((a) => isToday(a.at) && a.kind !== "limit_reached").length;
+  const openAlerts = alerts.filter((a) => !a.resolvedAt);
+  const errorsToday = alerts.filter((a) => isToday(a.createdAt)).length;
   const runs = upcomingRuns(3, now);
   const next = runs[0];
   const quiet = inQuietHours(safety, now);
@@ -133,8 +133,8 @@ export default function DashboardPage() {
                 return (
                   <a key={a.id} href="#alerts" className="flex items-start gap-2 rounded-md p-1 text-sm hover:bg-muted">
                     <k.icon className={cn("mt-0.5 size-4 shrink-0", k.color)} />
-                    <span className="flex-1">{a.title}</span>
-                    <span className="text-xs whitespace-nowrap text-muted-foreground">{timeAgo(a.at)}</span>
+                    <span className="flex-1">{alertTitle(a)}</span>
+                    <span className="text-xs whitespace-nowrap text-muted-foreground">{timeAgo(a.createdAt)}</span>
                   </a>
                 );
               })

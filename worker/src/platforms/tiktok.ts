@@ -1,7 +1,9 @@
 // TikTok (com.zhiliaoapp.musically). Tested on Android 13, app UI in Portuguese.
 // TikTok's resource ids are obfuscated (e.g. "lz5"), so this matches on labels.
+import { countFromLabel, videoIdentity, type VideoMeasurement } from "./video-metrics.ts";
 import type { Browser } from "../devices.ts";
-import { byDesc, byText, dismissSystemPrompts, findAny, labelRe, sleep, tap, tapAny } from "../ui.ts";
+import { byDesc, byText, dismissSystemPrompts, findAny, labelRe, sleep, swipeUp, tap, tapAny } from "../ui.ts";
+import { checkScreen } from "../screen-check.ts";
 import { NeedsAttention, type Platform } from "./types.ts";
 
 const PKG = "com.zhiliaoapp.musically";
@@ -26,18 +28,27 @@ async function ensureForeground(s: Browser) {
   const deadline = Date.now() + 12_000;
   while ((await s.getCurrentPackage()) !== PKG && Date.now() < deadline) await sleep(500);
   await sleep(1000);
+  if (await findAny(s, [byText(labelRe("Continue editing this post?", "Continuar a editar esta publicação?")), byDesc(labelRe("Continue editing this post?", "Continuar a editar esta publicação?"))], 500)) {
+    throw new NeedsAttention("TikTok has an unfinished post. Save or discard it on the phone, then try again.");
+  }
   // A contacts prompt (with a "find contacts" sheet behind it) shows up now and then.
   if (await dismissSystemPrompts(s)) await s.back();
   if ((await s.getCurrentPackage()) !== PKG) {
     throw new NeedsAttention("TikTok did not come to the foreground");
   }
+  await checkScreen(s, PKG);
 }
 
 /** Bring TikTok to its main screens and return the Home tab element. */
 async function goHome(s: Browser) {
   await ensureForeground(s);
   let home = await findAny(s, HOME_TAB, 3000);
+  let seen: NeedsAttention["seen"];
   if (!home) {
+    // Keep what was there: going back or restarting may close it before a person sees it.
+    const xml = await checkScreen(s, PKG);
+    const png = await s.takeScreenshot().catch(() => undefined);
+    seen = { xml: xml ?? undefined, png };
     await s.back();
     home = await findAny(s, HOME_TAB, 2000);
   }
@@ -47,7 +58,7 @@ async function goHome(s: Browser) {
     await ensureForeground(s);
     home = await findAny(s, HOME_TAB, 8000);
   }
-  if (!home) throw new NeedsAttention("TikTok home tab not found (logged out or a popup is open?)");
+  if (!home) throw new NeedsAttention("TikTok home tab not found (logged out or a popup is open?)", seen);
   return home;
 }
 
@@ -172,9 +183,16 @@ export const tiktok: Platform = {
   async follow(s) {
     const btn = await findAny(s, FOLLOW, 1000);
     if (!btn) return false;
+    await checkScreen(s, PKG);
     await btn.click();
     await sleep(800);
+    await checkScreen(s, PKG);
     return true;
+  },
+
+  async readVideos(s, username, stopped) {
+    await openProfile(s);
+    return readProfileVideos(s, username, 12, stopped);
   },
 
   async readAccountStats(s) {
@@ -203,7 +221,12 @@ export const tiktok: Platform = {
   },
 
   async switchAccount(s, username) {
+    await openProfile(s);
+    const active = await findAny(s, [byText("^@.+")], 3000);
+    const activeName = active ? (await active.getText()).replace(/^@/, "").replace(/[\uFFFC-\uFFFD]/g, "").trim() : "";
+    if (activeName.toLowerCase() === username.toLowerCase()) return;
     await openSwitcher(s);
+    await findAny(s, [byDesc(labelRe(username))], 4000);
     const accounts = await sheetAccounts(s);
     const target = accounts.find((a) => a.name.toLowerCase() === username.toLowerCase());
     if (!target) {
@@ -217,8 +240,91 @@ export const tiktok: Platform = {
     await tapAny(s, [byDesc(labelRe(target.name))], `@${username} in the switcher`);
     // Switching reloads the app; wait for the tab bar to come back.
     await sleep(4000);
+    await checkScreen(s, PKG);
     if (!(await findAny(s, [...HOME_TAB, ...PROFILE_TAB], 15000))) {
       throw new NeedsAttention(`TikTok did not finish switching to @${username}`);
     }
   },
 };
+
+
+/** Collect a bounded batch from the profile currently on screen. */
+export async function readProfileVideos(s: Browser, username: string, limit = 12, stopped = () => false): Promise<VideoMeasurement[]> {
+  const handle = await findAny(s, [byText("^@.+")], 5000);
+  const current = handle ? (await handle.getText()).replace(/^@/, "").replace(/[\uFFFC-\uFFFD]/g, "").trim() : "";
+  if (current.toLowerCase() !== username.toLowerCase()) throw new Error("TikTok profile does not match the requested account");
+  const videos: VideoMeasurement[] = [];
+  const seen = new Set<string>();
+  let lastPage = "";
+  for (let page = 0; page < 6 && videos.length < limit; page++) {
+    if (stopped()) throw new Error("Video collection stopped");
+    const counts = await s.$$("id=com.zhiliaoapp.musically:id/tv_play_count").getElements();
+    if (!counts.length) {
+      if (page === 0 && await findAny(s, [byText(labelRe("Complete your profile", "Concluir o teu perfil", "Upload your first video", "Carrega o teu primeiro vídeo"))], 1500)) return [];
+      if (videos.length) break;
+      throw new Error("No video tiles found. Check that the profile has posted videos and is fully loaded.");
+    }
+    const tiles: { x: number; y: number; views: number }[] = [];
+    for (const el of counts) {
+      const [loc, size, text] = await Promise.all([el.getLocation(), el.getSize(), el.getText()]);
+      tiles.push({ x: loc.x + size.width / 2, y: loc.y + size.height / 2, views: parseProfileCount(text) });
+    }
+    const signature = JSON.stringify(tiles);
+    if (signature === lastPage) break;
+    lastPage = signature;
+    for (const tile of tiles) {
+      if (stopped()) throw new Error("Video collection stopped");
+      if (videos.length >= limit) break;
+      await tap(s, tile.x, tile.y);
+      await sleep(1000);
+      const video = await readOpenVideo(s, tile.views);
+      const owner = decodeURIComponent(new URL(video.url).pathname.split("/")[1]).replace(/^@/, "");
+      if (owner.toLowerCase() !== username.toLowerCase()) throw new Error("The video link belongs to a different TikTok account");
+      if (!seen.has(video.platformVideoId)) {
+        seen.add(video.platformVideoId);
+        videos.push(video);
+      }
+      await s.back();
+      await sleep(700);
+      if (!(await findAny(s, ["id=com.zhiliaoapp.musically:id/tv_play_count"], 4000))) throw new Error("TikTok did not return to the video grid");
+    }
+    if (videos.length >= limit) break;
+    await swipeUp(s, 350);
+    await sleep(900);
+  }
+  return videos;
+}
+
+export async function readOpenVideo(s: Browser, views: number): Promise<VideoMeasurement> {
+  const metric = async (pattern: string) => {
+    const el = await findAny(s, [byDesc(pattern)], 1500);
+    return el ? countFromLabel((await el.getAttribute("content-desc")) ?? "", parseProfileCount) : null;
+  };
+  const likes = await metric("(?i)^(like video|unlike video|gostar do vídeo|deixar de gostar do vídeo|curtir vídeo|me gusta el v[ií]deo).*");
+  const comments = await metric("(?i)^(read or add comments|l[eê] ou adiciona coment[aá]rios|lee o a[nñ]ade comentarios).*");
+  const shares = await metric("(?i)^(share video|partilhar vídeo|compartilhar vídeo|compartir video).*");
+  const save = await findAny(s, [byDesc("(?i).*(favorites|favoritos).*" )], 1000);
+  let saves: number | null = null;
+  if (save) {
+    const label = (await save.getAttribute("content-desc")) ?? "";
+    saves = countFromLabel(label, parseProfileCount);
+    if (saves === null) {
+      const el = await s.$(`//*[@content-desc=${JSON.stringify(label)}]//*[@class="android.widget.TextView"]`);
+      if (await el.isExisting()) saves = countFromLabel(await el.getText(), parseProfileCount);
+    }
+  }
+  const captionEl = await findAny(s, ['//*[@class="X.07ng" or @class="X.07nG" or @resource-id="com.zhiliaoapp.musically:id/desc"]'], 1000);
+  const caption = captionEl ? await captionEl.getText() : "";
+  await tapAny(s, [...VIDEO_SHARE, byDesc(labelRe("More", "Mais", "Más"))], "the video's share menu");
+  await tapAny(s, [byText(labelRe("Copy link", "Copiar link", "Copiar ligação", "Copiar enlace")), byDesc(labelRe("Copy link", "Copiar link", "Copiar ligação", "Copiar enlace"))], "Copy link", 4000);
+  await sleep(800);
+  const copied = Buffer.from(await s.getClipboard(), "base64").toString("utf8");
+  const link = copied.match(/https:\/\/(?:[a-z0-9-]+\.)*tiktok\.com\/[^\s]+/i)?.[0];
+  if (!link) throw new Error("TikTok did not copy a video link");
+  let permanent = link;
+  if (!new URL(link).pathname.match(/^\/@[^/]+\/(?:video|photo)\/\d+/)) {
+    const response = await fetch(link, { method: "HEAD", signal: AbortSignal.timeout(10000) });
+    permanent = response.url;
+  }
+  return { ...videoIdentity(permanent), caption, views, likes, comments, shares, saves };
+}

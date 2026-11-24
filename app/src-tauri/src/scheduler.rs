@@ -508,7 +508,7 @@ async fn plan_and_run(app: &AppHandle, schedule: &Schedule, run: i64) -> Vec<Val
                             result(&a.username, &serial, "ok", note)
                         }
                         // Safety refusals (quiet hours, daily limit) are skips, not failures.
-                        Err(e) if e.contains("Quiet hours") || e.contains("today's warm-up limit") => {
+                        Err(e) if e.contains("Quiet hours") || e.contains("today's warm-up limit") || e.starts_with(crate::alerts::HOLD) => {
                             result(&a.username, &serial, "skipped", e)
                         }
                         Err(e) => result(&a.username, &serial, "error", e),

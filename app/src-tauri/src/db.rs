@@ -110,6 +110,42 @@ const MIGRATIONS: &[&str] = &[r#"
         finished_at TEXT,
         UNIQUE (schedule_id, slot)
     );
+"#, r#"
+    CREATE TABLE video_readings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        captured_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        measurements TEXT NOT NULL
+    );
+    CREATE INDEX video_readings_account ON video_readings(account_id, id);
+"#, r#"
+    CREATE TABLE posts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        caption TEXT NOT NULL,
+        visibility TEXT NOT NULL CHECK(visibility IN ('private', 'public')),
+        bytes INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('uploading', 'draft', 'preparing', 'ready', 'publishing', 'submitted', 'failed', 'uncertain')),
+        error TEXT,
+        created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+    );
+"#, r#"
+    CREATE TABLE alerts (
+        id          INTEGER PRIMARY KEY AUTOINCREMENT,
+        kind        TEXT NOT NULL,
+        label       TEXT,                     -- what the user said it was
+        serial      TEXT NOT NULL,
+        platform    TEXT,
+        username    TEXT,
+        action      TEXT NOT NULL,
+        message     TEXT NOT NULL,
+        dir         TEXT,                     -- folder with screen.png, screen.xml, info.json
+        details     TEXT NOT NULL,
+        created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        resolved_at TEXT
+    );
+    CREATE INDEX alerts_open ON alerts(serial) WHERE resolved_at IS NULL;
 "#];
 
 #[derive(Serialize)]
@@ -170,6 +206,8 @@ impl Db {
              finished_at = datetime('now') WHERE status = 'running'",
             [],
         )?;
+        conn.execute("UPDATE posts SET status = 'failed', error = 'App closed during preparation. Prepare this draft again.' WHERE status IN ('preparing', 'ready')", [])?;
+        conn.execute("UPDATE posts SET status = 'uncertain', error = 'App closed while publishing. Check TikTok before posting again.' WHERE status = 'publishing'", [])?;
         Ok(Self(Mutex::new(conn)))
     }
 

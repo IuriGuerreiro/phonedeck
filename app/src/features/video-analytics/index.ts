@@ -8,6 +8,5 @@ export const feature: Feature = {
   label: "Videos",
   icon: Clapperboard,
   group: "Analytics",
-  preview: true,
   page: lazy(() => import("./Page")),
 };

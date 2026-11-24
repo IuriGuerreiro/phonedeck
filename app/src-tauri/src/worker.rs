@@ -193,6 +193,7 @@ fn handle_message(app: &AppHandle, status: &Mutex<WorkerStatus>, pending: &Pendi
             let error = msg["error"].as_str().unwrap_or("Worker failed").to_string();
             set_status(app, status, WorkerStatus::Failed { error });
         }
+        Some("blocked") => crate::alerts::record(app, &msg),
         Some("progress") => {
             if let (Some(serial), Some(message), Some(live)) =
                 (msg["serial"].as_str(), msg["message"].as_str(), app.try_state::<crate::live::Live>())

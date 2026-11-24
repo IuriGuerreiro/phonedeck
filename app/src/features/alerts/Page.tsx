@@ -1,126 +1,137 @@
-// Things that need a human: captchas, offline phones, logged-out accounts.
-import { useState } from "react";
-import { Ban, CheckCheck, CircleAlert, RotateCcw, ShieldAlert, Smartphone, UserX } from "lucide-react";
+// Screens that stopped a job and need a person. The phone is on hold until resolved.
+import { useEffect, useState } from "react";
+import { CheckCheck, Smartphone } from "lucide-react";
+import { toast } from "sonner";
 
+import { api, type Alert, type AlertKind, type AlertLabel } from "@/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { reloadAlerts, useAlerts } from "@/data/alerts";
 import { timeAgo } from "@/lib/mock";
 import { cn } from "@/lib/utils";
-import { alertsApi, useAlerts, type Alert, type AlertKind } from "@/mocks/alerts";
-import { useSettings } from "@/settings/SettingsContext";
+import { ALERT_KIND, alertTitle } from "./kinds";
 
-export const ALERT_KIND: Record<AlertKind, { label: string; icon: typeof CircleAlert; color: string }> = {
-  captcha: { label: "Captcha", icon: ShieldAlert, color: "text-[#d9900a]" },
-  offline: { label: "Offline", icon: Smartphone, color: "text-[#d03b3b]" },
-  logged_out: { label: "Logged out", icon: UserX, color: "text-[#d03b3b]" },
-  job_failed: { label: "Job failed", icon: CircleAlert, color: "text-[#d03b3b]" },
-  limit_reached: { label: "Limit reached", icon: Ban, color: "text-[#d9900a]" },
-};
-
-type Tab = "open" | "solved";
+const LABELS: [AlertLabel, string][] = [
+  ...(Object.keys(ALERT_KIND) as AlertKind[]).filter((k) => k !== "unknown").map((k): [AlertLabel, string] => [k, ALERT_KIND[k].label]),
+  ["unknown", "Something else"],
+  ["false_alarm", "False alarm"],
+];
 
 export default function AlertsPage() {
-  const alerts = useAlerts();
-  const [tab, setTab] = useState<Tab>("open");
-  const [kind, setKind] = useState<AlertKind | null>(null);
-  const { openSettings } = useSettings();
-
-  const open = alerts.filter((a) => !a.solvedAt);
-  const solved = alerts.filter((a) => a.solvedAt);
-  const list = (tab === "open" ? open : solved)
-    .filter((a) => !kind || a.kind === kind)
-    .sort((a, b) => b.at.localeCompare(a.at));
+  const { alerts, error, loading } = useAlerts();
+  const [showResolved, setShowResolved] = useState(false);
+  const open = alerts.filter((a) => !a.resolvedAt);
+  const list = showResolved ? alerts.filter((a) => a.resolvedAt) : open;
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div>
         <h1 className="text-lg font-semibold">Alerts</h1>
-        {tab === "open" && open.length > 0 && (
-          <Button variant="outline" size="sm" onClick={alertsApi.solveAll}>
-            <CheckCheck /> Resolve all
-          </Button>
-        )}
+        <p className="text-sm text-muted-foreground">A phone with an open alert runs no jobs until you resolve it.</p>
       </div>
-
-      <div className="flex flex-wrap items-center gap-1">
-        <Button size="sm" variant={tab === "open" ? "secondary" : "ghost"} onClick={() => setTab("open")}>
+      <div className="flex gap-1">
+        <Button size="sm" variant={showResolved ? "ghost" : "secondary"} onClick={() => setShowResolved(false)}>
           Open ({open.length})
         </Button>
-        <Button size="sm" variant={tab === "solved" ? "secondary" : "ghost"} onClick={() => setTab("solved")}>
-          Resolved ({solved.length})
+        <Button size="sm" variant={showResolved ? "secondary" : "ghost"} onClick={() => setShowResolved(true)}>
+          Resolved
         </Button>
-        <span className="mx-2 h-4 w-px bg-border" />
-        <Button size="sm" variant={kind === null ? "secondary" : "ghost"} onClick={() => setKind(null)}>
-          All
-        </Button>
-        {(Object.keys(ALERT_KIND) as AlertKind[]).map((k) => (
-          <Button key={k} size="sm" variant={kind === k ? "secondary" : "ghost"} onClick={() => setKind(k)}>
-            {ALERT_KIND[k].label}
-          </Button>
-        ))}
       </div>
-
-      {list.length === 0 ? (
+      {error && <p className="text-sm text-[#d03b3b]">Couldn't load alerts: {error}</p>}
+      {list.map((a) => (
+        <AlertCard key={a.id} alert={a} />
+      ))}
+      {list.length === 0 && !error && (
         <Card>
-          <CardContent className="flex flex-col items-center gap-2 py-10 text-center text-sm text-muted-foreground">
-            <CheckCheck className="size-8 text-[#0ca30c]" />
-            {tab === "open" ? "No open alerts" : "No resolved alerts"}
+          <CardContent className="py-10 text-center text-sm text-muted-foreground">
+            {loading ? "Loading…" : showResolved ? "No resolved alerts" : "No open alerts"}
           </CardContent>
         </Card>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {list.map((a) => (
-            <AlertRow key={a.id} alert={a} onSettings={() => openSettings("safety")} />
-          ))}
-        </div>
       )}
     </div>
   );
 }
 
-function AlertRow({ alert: a, onSettings }: { alert: Alert; onSettings: () => void }) {
+function AlertCard({ alert: a }: { alert: Alert }) {
   const k = ALERT_KIND[a.kind];
+  const [busy, setBusy] = useState(false);
+  const act = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await fn();
+      await reloadAlerts();
+    } catch (e) {
+      toast.error(String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
-    <Card className={cn(a.solvedAt && "opacity-70")}>
-      <CardContent className="flex items-start gap-3">
-        <k.icon className={cn("mt-0.5 size-5 shrink-0", k.color)} />
-        <div className="min-w-0 flex-1">
+    <Card className={cn(a.resolvedAt && "opacity-80")}>
+      <CardContent className="flex flex-col gap-4 sm:flex-row">
+        <Shot alert={a} />
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-medium">{a.title}</span>
-            <Badge variant="outline">{k.label}</Badge>
+            <k.icon className={cn("size-5 shrink-0", k.color)} />
+            <span className="font-medium">{alertTitle(a)}</span>
+            {!a.resolvedAt && <Badge variant="outline">Phone on hold</Badge>}
           </div>
-          <p className="text-sm text-muted-foreground">{a.detail}</p>
-          <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <span>{timeAgo(a.at)}</span>
-            {a.solvedAt && <span>Resolved {timeAgo(a.solvedAt)}</span>}
-            {a.serial && (
-              <a href={`#devices/${a.serial}`} className="underline-offset-4 hover:underline">
-                Device
-              </a>
-            )}
-            {a.accountId && (
-              <a href={`#accounts/${a.accountId}`} className="underline-offset-4 hover:underline">
-                Account
-              </a>
-            )}
-            {a.kind === "limit_reached" && (
-              <button className="underline-offset-4 hover:underline" onClick={onSettings}>
-                Safety limits
-              </button>
+          <p className="text-sm break-words text-muted-foreground">{a.message}</p>
+          <p className="text-xs text-muted-foreground">
+            {timeAgo(a.createdAt)} · {a.serial} · {a.action}
+            {a.resolvedAt && ` · Resolved ${timeAgo(a.resolvedAt)}`}
+          </p>
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-muted-foreground">What was it?</span>
+            <div className="flex flex-wrap gap-1">
+              {LABELS.map(([id, text]) => (
+                <Button key={id} size="sm" disabled={busy} aria-pressed={a.label === id} variant={a.label === id ? "secondary" : "ghost"} onClick={() => act(() => api.labelAlert(a.id, id))}>
+                  {text}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="outline" nativeButton={false} render={<a href={`#devices/${encodeURIComponent(a.serial)}`} />}>
+              <Smartphone /> Open phone
+            </Button>
+            {!a.resolvedAt && (
+              <Button size="sm" disabled={busy} onClick={() => act(() => api.resolveAlert(a.id))}>
+                <CheckCheck /> Solved, continue
+              </Button>
             )}
           </div>
         </div>
-        {a.solvedAt ? (
-          <Button size="sm" variant="ghost" onClick={() => alertsApi.reopen(a.id)}>
-            <RotateCcw /> Reopen
-          </Button>
-        ) : (
-          <Button size="sm" variant="outline" onClick={() => alertsApi.solve(a.id)}>
-            <CheckCheck /> Resolve
-          </Button>
-        )}
       </CardContent>
     </Card>
+  );
+}
+
+function Shot({ alert: { id, hasScreenshot } }: { alert: Alert }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasScreenshot) return;
+    let url: string | null = null;
+    let alive = true;
+    api.alertScreenshot(id).then(
+      (bytes) => {
+        if (!alive) return;
+        url = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+        setSrc(url);
+      },
+      () => {},
+    );
+    return () => {
+      alive = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [id, hasScreenshot]);
+  return src ? (
+    <img src={src} alt="Phone screen when the job stopped" className="max-h-96 w-44 shrink-0 self-start rounded-md border object-contain" />
+  ) : (
+    <div className="flex h-32 w-44 shrink-0 items-center justify-center rounded-md border text-xs text-muted-foreground">
+      {hasScreenshot ? "Loading…" : "No screenshot"}
+    </div>
   );
 }

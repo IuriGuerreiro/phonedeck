@@ -220,6 +220,26 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
         "restart_worker" => to_json(crate::restart_worker(app.clone()).await),
         "run_job" => to_json(crate::execute_job(app, arg(&a, "serial")?, arg(&a, "job")?).await),
         "stop_job" => to_json(crate::stop_job(app.state(), arg(&a, "serial")?).await),
+        "list_posts" => to_json(blocking(app, |x| crate::posting::list_posts(x.state())).await?),
+        "create_post" => {
+            let (account_id, name, caption, visibility, bytes) = (arg(&a, "accountId")?, arg(&a, "name")?, arg(&a, "caption")?, arg(&a, "visibility")?, arg(&a, "bytes")?);
+            to_json(blocking(app, move |x| crate::posting::create_post(x.state(), account_id, name, caption, visibility, bytes)).await?)
+        }
+        "upload_post_chunk" => {
+            let (id, offset, data) = (arg(&a, "id")?, arg(&a, "offset")?, arg(&a, "data")?);
+            to_json(blocking(app, move |x| crate::posting::upload_post_chunk(x.state(), x.state(), id, offset, data)).await?)
+        }
+        "finish_post_upload" => {
+            let id = arg(&a, "id")?;
+            to_json(blocking(app, move |x| crate::posting::finish_post_upload(x.state(), x.state(), id)).await?)
+        }
+        "delete_post" => {
+            let id = arg(&a, "id")?;
+            to_json(blocking(app, move |x| crate::posting::delete_post(x.state(), x.state(), id)).await?)
+        }
+        "prepare_post" => to_json(crate::posting::prepare_post(app.clone(), arg(&a, "id")?).await),
+        "publish_post" => to_json(crate::posting::publish_post(app.clone(), arg(&a, "id")?).await),
+        "video_readings" => to_json(blocking(app, |x| crate::video_analytics::video_readings(x.state())).await?),
         "account_snapshots" => to_json(blocking(app, |x| crate::account_snapshots(x.state())).await?),
         "list_groups" => to_json(blocking(app, |x| crate::list_groups(x.state())).await?),
         "save_group" => {
@@ -271,6 +291,19 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
         "usage_today" => {
             let (serial, username): (String, String) = (arg(&a, "serial")?, arg(&a, "username")?);
             to_json(blocking(app, move |x| crate::usage_today(x.state(), serial, username)).await?)
+        }
+        "list_alerts" => to_json(blocking(app, |x| crate::alerts::list_alerts(x.state())).await?),
+        "resolve_alert" => {
+            let id: i64 = arg(&a, "id")?;
+            to_json(blocking(app, move |x| crate::alerts::resolve_alert(x.state(), id)).await?)
+        }
+        "label_alert" => {
+            let (id, label): (i64, String) = (arg(&a, "id")?, arg(&a, "label")?);
+            to_json(blocking(app, move |x| crate::alerts::label_alert(x.state(), id, label)).await?)
+        }
+        "alert_screenshot" => {
+            let id: i64 = arg(&a, "id")?;
+            blocking(app, move |x| crate::alerts::screenshot_bytes(&x.state(), id)).await?.map(Reply::Bytes)
         }
         "list_schedules" => to_json(blocking(app, |x| crate::list_schedules(x.state())).await?),
         "save_schedule" => {

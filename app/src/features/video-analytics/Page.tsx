@@ -1,233 +1,96 @@
-// How each posted video is doing.
 import { useEffect, useState } from "react";
-import { ArrowDown, ArrowLeft } from "lucide-react";
-
-import { BarChart, LineChart } from "@/components/shared/charts";
+import { ArrowLeft } from "lucide-react";
+import { api, type Account, type VideoReading } from "@/api";
+import { LineChart } from "@/components/shared/charts";
 import { StatTile } from "@/components/shared/StatTile";
-import { VideoThumb } from "@/components/shared/VideoThumb";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import { engagement, fmtNum, usePosts, videoStats, type Post, type VideoStats } from "@/mocks/posts";
-import { accountsApi, type Account } from "@/mocks/accounts";
+import { engagement, latestVideos, videoKey } from "@/data/video-analytics";
 
-const idFromHash = () => Number(window.location.hash.split("/")[1]) || null;
-const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
+const selectedKey = () => window.location.hash.split("/")[1] ?? null;
+const count = (n: number | null) => n === null ? "—" : n.toLocaleString();
+const pct = (n: number | null) => n === null ? "—" : `${(n * 100).toFixed(1)}%`;
+type Sort = "views" | "likes" | "capturedAt";
 
 export default function VideoAnalyticsPage() {
-  const [id, setId] = useState(idFromHash);
   const [accounts, setAccounts] = useState<Account[]>([]);
-
+  const [readings, setReadings] = useState<VideoReading[]>([]);
+  const [accountId, setAccountId] = useState<number | null>(null);
+  const [detailKey, setDetailKey] = useState(selectedKey);
+  const [sort, setSort] = useState<Sort>("views");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  async function load() {
+    const [list, saved] = await Promise.all([api.listAccounts(), api.videoReadings()]);
+    setAccounts(list); setReadings(saved);
+    setAccountId((id) => list.some((a) => a.id === id) ? id : list[0]?.id ?? null);
+  }
   useEffect(() => {
-    accountsApi.list().then(setAccounts);
-    const onHash = () => setId(idFromHash());
+    load().catch((e: unknown) => setError(String(e))).finally(() => setLoading(false));
+    const onHash = () => setDetailKey(selectedKey());
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
-
-  const username = (aid: number) => accounts.find((a) => a.id === aid)?.username ?? `#${aid}`;
-  return id ? <VideoDetail id={id} username={username} /> : <VideoList username={username} />;
-}
-
-type SortKey = "at" | "views" | "engagement" | "completion" | "followers";
-
-function VideoList({ username }: { username: (id: number) => string }) {
-  const posts = usePosts();
-  const [sort, setSort] = useState<SortKey>("at");
-  const [account, setAccount] = useState<number | null>(null);
-
-  const rows = posts
-    .filter((p) => p.status === "posted" && (account === null || p.accountId === account))
-    .map((p) => ({ p, s: videoStats(p)! }));
-
-  const value = ({ p, s }: { p: Post; s: VideoStats }) =>
-    ({ at: new Date(p.at).getTime(), views: s.views, engagement: engagement(s), completion: s.completionRate, followers: s.newFollowers })[sort];
-  rows.sort((a, b) => value(b) - value(a));
-
-  const totals = rows.reduce(
-    (t, { s }) => ({ views: t.views + s.views, likes: t.likes + s.likes, followers: t.followers + s.newFollowers }),
-    { views: 0, likes: 0, followers: 0 },
-  );
-  const accountIds = [...new Set(posts.filter((p) => p.status === "posted").map((p) => p.accountId))];
-
-  const Th = ({ k, children, className }: { k: SortKey; children: React.ReactNode; className?: string }) => (
-    <TableHead className={className}>
-      <button className={cn("inline-flex items-center gap-1", sort === k && "text-foreground")} onClick={() => setSort(k)}>
-        {children}
-        {sort === k && <ArrowDown className="size-3" />}
-      </button>
-    </TableHead>
-  );
-
-  return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Video analytics</h1>
-
-      <div className="grid gap-3 sm:grid-cols-4">
-        <StatTile label="Videos" value={String(rows.length)} />
-        <StatTile label="Views" value={fmtNum(totals.views)} />
-        <StatTile label="Likes" value={fmtNum(totals.likes)} />
-        <StatTile label="New followers" value={fmtNum(totals.followers)} />
-      </div>
-
-      <div className="flex flex-wrap gap-1">
-        <Button size="sm" variant={account === null ? "secondary" : "ghost"} onClick={() => setAccount(null)}>
-          All
-        </Button>
-        {accountIds.map((aid) => (
-          <Button key={aid} size="sm" variant={account === aid ? "secondary" : "ghost"} onClick={() => setAccount(aid)}>
-            @{username(aid)}
-          </Button>
-        ))}
-      </div>
-
-      <Card>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <Th k="at">Video</Th>
-                <Th k="views" className="text-right">Views</Th>
-                <Th k="engagement" className="text-right">Engagement</Th>
-                <Th k="completion" className="text-right">Completion</Th>
-                <Th k="followers" className="text-right">Followers</Th>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.map(({ p, s }) => (
-                <TableRow key={p.id} className="cursor-pointer" onClick={() => (window.location.hash = `video-analytics/${p.id}`)}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <VideoThumb cover={p.cover} durationSec={p.durationSec} className="w-8" />
-                      <div className="min-w-0">
-                        <div className="max-w-72 truncate font-medium">{p.caption}</div>
-                        <div className="text-xs text-muted-foreground">
-                          @{username(p.accountId)} · {new Date(p.at).toLocaleDateString([], { day: "numeric", month: "short" })}
-                        </div>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{fmtNum(s.views)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{pct(engagement(s))}</TableCell>
-                  <TableCell className="text-right tabular-nums">{pct(s.completionRate)}</TableCell>
-                  <TableCell className="text-right tabular-nums">+{fmtNum(s.newFollowers)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          {rows.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">No posted videos.</p>}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function VideoDetail({ id, username }: { id: number; username: (id: number) => string }) {
-  const post = usePosts().find((p) => p.id === id);
-  const back = (
-    <Button variant="ghost" size="sm" className="self-start" nativeButton={false} render={<a href="#video-analytics" />}>
-      <ArrowLeft /> Videos
-    </Button>
-  );
-  const s = post && videoStats(post);
-  if (!post || !s)
-    return (
-      <div className="flex flex-col gap-3">
-        {back}
-        <p className="text-sm text-muted-foreground">No analytics available.</p>
-      </div>
-    );
-
-  return (
-    <div className="flex flex-col gap-4">
+  const account = accounts.find((a) => a.id === accountId);
+  const videos = latestVideos(readings);
+  const rows = videos.filter((v) => v.accountId === accountId).sort((a, b) => sort === "capturedAt" ? Date.parse(b.capturedAt) - Date.parse(a.capturedAt) : (b[sort] ?? -1) - (a[sort] ?? -1));
+  const detail = videos.find((v) => v.key === detailKey);
+  const accountReadings = readings.filter((r) => r.accountId === accountId);
+  const lastRead = accountReadings[accountReadings.length - 1];
+  async function refresh() {
+    if (!account) return;
+    setBusy(true); setError(null);
+    try {
+      await api.runJob(account.serial, { action: "video_analytics", platform: account.platform, username: account.username });
+      await load();
+    } catch (e) { setError(String(e)); }
+    finally { setBusy(false); }
+  }
+  const back = <Button variant="ghost" size="sm" className="self-start" nativeButton={false} render={<a href="#video-analytics" />}><ArrowLeft /> Videos</Button>;
+  if (detailKey) {
+    if (loading) return <p>Loading video…</p>;
+    if (!detail) return <div className="flex flex-col gap-3">{back}<p>{error ?? "No saved measurements for this video."}</p></div>;
+    const history = readings.flatMap((r) => r.accountId === detail.accountId ? r.videos.filter((v) => videoKey(r.accountId, v.platformVideoId) === detail.key).map((v) => ({ ...v, capturedAt: r.capturedAt })) : []);
+    const owner = accounts.find((a) => a.id === detail.accountId);
+    return <div className="flex flex-col gap-4">
       {back}
-      <div className="flex items-start gap-4">
-        <VideoThumb cover={post.cover} durationSec={post.durationSec} className="w-20" />
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold">{post.caption}</h1>
-          <p className="text-sm text-muted-foreground">{post.hashtags.map((h) => `#${h}`).join(" ")}</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            <a href={`#accounts/${post.accountId}`} className="text-foreground underline-offset-4 hover:underline">
-              @{username(post.accountId)}
-            </a>{" "}
-            · {new Date(post.at).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" })} · {post.durationSec}s
-          </p>
-        </div>
-      </div>
-
+      <h1 className="text-lg font-semibold">{detail.caption || `Video ${detail.platformVideoId}`}</h1>
+      <p className="text-sm text-muted-foreground">@{owner?.username} · Last read {new Date(detail.capturedAt).toLocaleString()}</p>
+      <a className="text-sm underline" href={detail.url} target="_blank" rel="noreferrer">Open on TikTok</a>
       <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatTile label="Views" value={fmtNum(s.views)} />
-        <StatTile label="Likes" value={fmtNum(s.likes)} />
-        <StatTile label="Comments" value={fmtNum(s.comments)} />
-        <StatTile label="Shares" value={fmtNum(s.shares)} />
-        <StatTile label="Saves" value={fmtNum(s.saves)} />
-        <StatTile label="Followers" value={`+${fmtNum(s.newFollowers)}`} />
+        <StatTile label="Views" value={count(detail.views)} />
+        <StatTile label="Likes" value={count(detail.likes)} />
+        <StatTile label="Comments" value={count(detail.comments)} />
+        <StatTile label="Shares" value={count(detail.shares)} />
+        <StatTile label="Saves" value={count(detail.saves)} />
+        <StatTile label="Engagement" value={pct(engagement(detail))} sub="Likes + comments + shares / views" />
       </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Daily views</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart
-              unit="views"
-              data={s.daily.map((d) => ({ label: new Date(d.date).toLocaleDateString([], { day: "numeric", month: "short" }), value: d.views }))}
-            />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Retention</CardTitle>
-            <CardDescription>
-              Avg watch {s.avgWatchSec}s / {post.durationSec}s · {pct(s.completionRate)} completed
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <LineChart unit="%" data={s.retention.map((v, i) => ({ label: `${i * 10}%`, value: v }))} />
-          </CardContent>
-        </Card>
+      <Card><CardHeader><CardTitle>Views over time</CardTitle></CardHeader><CardContent>
+        {history.length > 1 ? <LineChart unit="views" data={history.map((v) => ({ label: new Date(v.capturedAt).toLocaleString(), value: v.views }))} /> : <p className="text-sm text-muted-foreground">Refresh this account again later to build a history of total views.</p>}
+      </CardContent></Card>
+      <p className="text-sm text-muted-foreground">Counts may be rounded by TikTok. Watch time, retention, traffic sources, and followers gained are not collected.</p>
+    </div>;
+  }
+  return <div className="flex flex-col gap-4">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h1 className="text-lg font-semibold">Video analytics</h1><Button disabled={!account || loading || busy} onClick={refresh}>{busy ? "Reading phone…" : "Refresh from phone"}</Button></div>
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {loading && <p>Loading videos…</p>}
+    {!loading && !accounts.length && <p className="text-sm text-muted-foreground">Sync accounts from the Accounts page to get started.</p>}
+    <div className="flex flex-wrap gap-1">{accounts.map((a) => <Button key={a.id} size="sm" disabled={busy} variant={a.id === accountId ? "secondary" : "ghost"} onClick={() => setAccountId(a.id)}>@{a.username} · {a.serial}</Button>)}</div>
+    {account && <>
+      <p className="text-sm text-muted-foreground">Reads up to 12 videos from this account's profile per refresh. {lastRead ? `Last checked ${new Date(lastRead.capturedAt).toLocaleString()}.` : "Refresh to collect the first measurements."} Missing metrics appear as —.</p>
+      {lastRead?.videos.length === 0 && <p className="text-sm text-muted-foreground">No posted videos were found in the latest refresh.</p>}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatTile label="Tracked videos" value={String(rows.length)} />
+        <StatTile label="Total views" value={rows.length ? count(rows.reduce((n, v) => n + v.views, 0)) : "—"} sub="Latest saved count for each tracked video" />
+        <StatTile label="Total likes" value={rows.length && rows.every((v) => v.likes !== null) ? count(rows.reduce((n, v) => n + (v.likes ?? 0), 0)) : "—"} />
       </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Traffic sources</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-2.5">
-            {s.sources.map((src) => (
-              <div key={src.label} className="flex items-center gap-3 text-sm">
-                <span className="w-20 shrink-0 text-muted-foreground">{src.label}</span>
-                <div className="h-2 flex-1 rounded-full bg-muted">
-                  <div className="h-full rounded-full bg-primary" style={{ width: `${src.pct}%` }} />
-                </div>
-                <span className="w-10 text-right tabular-nums">{src.pct}%</span>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Engagement</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-1.5 text-sm">
-            <Rate k="Engagement rate" v={pct(engagement(s))} />
-            <Rate k="Like rate" v={pct(s.likes / s.views)} />
-            <Rate k="Share rate" v={pct(s.shares / s.views)} />
-            <Rate k="Follow rate" v={pct(s.newFollowers / s.views)} />
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function Rate({ k, v }: { k: string; v: string }) {
-  return (
-    <div className="flex justify-between gap-2">
-      <span className="text-muted-foreground">{k}</span>
-      <span className="tabular-nums">{v}</span>
-    </div>
-  );
+      <div className="flex gap-1">{(["views", "likes", "capturedAt"] satisfies Sort[]).map((key) => <Button key={key} size="sm" variant={sort === key ? "secondary" : "ghost"} onClick={() => setSort(key)}>{key === "capturedAt" ? "Last read" : key === "views" ? "Most views" : "Most likes"}</Button>)}</div>
+      <Card><CardContent><Table><TableHeader><TableRow><TableHead>Video</TableHead><TableHead className="text-right">Views</TableHead><TableHead className="text-right">Likes</TableHead><TableHead className="text-right">Comments</TableHead><TableHead className="text-right">Shares</TableHead><TableHead className="text-right">Engagement</TableHead><TableHead>Last read</TableHead></TableRow></TableHeader><TableBody>
+        {rows.map((v) => <TableRow key={v.key}><TableCell><a className="block max-w-72 truncate font-medium underline-offset-4 hover:underline" href={`#video-analytics/${v.key}`}>{v.caption || `Video ${v.platformVideoId}`}</a></TableCell><TableCell className="text-right tabular-nums">{count(v.views)}</TableCell><TableCell className="text-right tabular-nums">{count(v.likes)}</TableCell><TableCell className="text-right tabular-nums">{count(v.comments)}</TableCell><TableCell className="text-right tabular-nums">{count(v.shares)}</TableCell><TableCell className="text-right tabular-nums">{pct(engagement(v))}</TableCell><TableCell>{new Date(v.capturedAt).toLocaleString()}</TableCell></TableRow>)}
+      </TableBody></Table>{!rows.length && <p className="py-6 text-center text-sm text-muted-foreground">No saved video measurements yet.</p>}</CardContent></Card>
+    </>}
+  </div>;
 }

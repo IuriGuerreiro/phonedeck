@@ -1,4 +1,8 @@
+import type { VideoMeasurement } from "./video-metrics.ts";
 import type { Browser } from "../devices.ts";
+
+/** What stopped the automation. A best guess; the user can correct it. */
+export type BlockKind = "captcha" | "logged_out" | "account_warning" | "popup" | "unknown";
 
 export type PlatformId = "tiktok";
 
@@ -18,6 +22,7 @@ export type Platform = {
   doubleTapLikes: boolean;
   /** Usernames logged in on this phone, current one first. */
   listAccounts(s: Browser): Promise<string[]>;
+  readVideos(s: Browser, username: string, stopped: () => boolean): Promise<VideoMeasurement[]>;
   readAccountStats(s: Browser): Promise<{ username: string; followers: number; following: number; likes: number }>;
   /** Make `username` the active account. */
   switchAccount(s: Browser, username: string): Promise<void>;
@@ -29,4 +34,10 @@ export type Platform = {
  */
 export class NeedsAttention extends Error {
   code = "needs_attention" as const;
+  seen?: { kind?: BlockKind; clues?: string[]; xml?: string; png?: string };
+  /** `seen`: what was on screen when it was noticed, if later steps may have changed it. */
+  constructor(message: string, seen?: NeedsAttention["seen"]) {
+    super(message);
+    this.seen = seen;
+  }
 }
