@@ -142,6 +142,8 @@ struct MirrorQuery {
     max: Option<u32>,
     /// `0`: control only, no video frames (the page shows screenshots instead).
     video: Option<u8>,
+    /// `1`: also stream the phone's sound.
+    audio: Option<u8>,
 }
 
 fn authorized(ctx: &Ctx, headers: &HeaderMap, query: Option<&str>) -> bool {
@@ -280,8 +282,8 @@ async fn mirror_ws(
         return unauthorized();
     }
     let max = q.max.unwrap_or(1024).clamp(240, 2400);
-    let send_video = q.video != Some(0);
-    ws.on_upgrade(move |socket| crate::mirror::serve(socket, serial, max, send_video))
+    let opts = crate::mirror::Options { max_size: max, video: q.video != Some(0), audio: q.audio == Some(1) };
+    ws.on_upgrade(move |socket| crate::mirror::serve(socket, serial, opts))
 }
 
 async fn forward_events(mut socket: WebSocket, mut rx: broadcast::Receiver<String>) {

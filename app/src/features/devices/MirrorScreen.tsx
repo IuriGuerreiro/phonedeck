@@ -11,12 +11,14 @@ import {
   Square,
   Volume1,
   Volume2,
+  VolumeX,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/api";
 import { mirrorUrl } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
+import { PcmPlayer } from "./pcm-player";
 import { LiveScreen, type ScreenSize } from "./LiveScreen";
 
 /** Widest the phone gets, per size. It also shrinks so the phone + buttons fit the window height. */
@@ -108,6 +110,8 @@ function useScreenshot(serial: string, enabled: boolean, everyMs: number) {
 export function MirrorScreen({ serial, ready, size = "md", paused = false, unavailableText }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const audioRef = useRef<PcmPlayer | null>(null);
+  const [sound, setSound] = useState<"playing" | "blocked" | "muted" | "unavailable">("blocked");
   const videoSize = useRef({ w: 0, h: 0 });
   const [aspect, setAspect] = useState(9 / 19.5);
   const [status, setStatus] = useState<Status>("connecting");
@@ -125,6 +129,16 @@ export function MirrorScreen({ serial, ready, size = "md", paused = false, unava
     let timestamp = 0;
     let live = false;
     let failed = false;
+    setSound("blocked");
+    let audio: PcmPlayer | null = null;
+    try {
+      audio = new PcmPlayer((playing) => {
+        if (!closed) setSound(playing ? "playing" : "blocked");
+      });
+      audioRef.current = audio;
+    } catch {
+      setSound("unavailable");
+    }
     setStatus("connecting");
     setError(null);
 
@@ -132,6 +146,8 @@ export function MirrorScreen({ serial, ready, size = "md", paused = false, unava
     const fail = (msg: string) => {
       if (closed || failed) return;
       failed = true;
+      audio?.close();
+      audioRef.current = null;
       setError(msg);
       setStatus("error");
     };
@@ -153,7 +169,7 @@ export function MirrorScreen({ serial, ready, size = "md", paused = false, unava
     };
 
     (async () => {
-      const url = await mirrorUrl(serial, MAX_SIZE[size], canDecode);
+      const url = await mirrorUrl(serial, MAX_SIZE[size], canDecode, audio !== null);
       if (closed) return;
       if (!url) return fail("Web access is off (SMA_WEB=0), so the live screen can't run.");
       ws = new WebSocket(url);
@@ -171,6 +187,10 @@ export function MirrorScreen({ serial, ready, size = "md", paused = false, unava
               live = true;
               setStatus("live");
             }
+          } else if (m.type === "audio" && m.ok === false) {
+            audio?.close();
+            audioRef.current = null;
+            setSound("unavailable");
           } else if (m.type === "error") {
             fail(m.message);
           }
@@ -179,6 +199,10 @@ export function MirrorScreen({ serial, ready, size = "md", paused = false, unava
         const bytes = new Uint8Array(e.data);
         const flags = bytes[0];
         const data = bytes.subarray(1);
+        if (flags & 4) {
+          audio?.push(data);
+          return;
+        }
         if (flags & 1) {
           // SPS/PPS: (re)start the decoder with them as an avcC record.
           // avcC + length-prefixed packets (like MP4) works in WebKit as well as Chrome.
@@ -209,6 +233,8 @@ export function MirrorScreen({ serial, ready, size = "md", paused = false, unava
 
     return () => {
       closed = true;
+      audio?.close();
+      audioRef.current = null;
       wsRef.current = null;
       ws?.close();
       if (decoder && decoder.state !== "closed") decoder.close();
@@ -345,10 +371,31 @@ export function MirrorScreen({ serial, ready, size = "md", paused = false, unava
         <NavButton title="Volume up" onClick={key(KEY.volUp)}>
           <Volume2 />
         </NavButton>
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          disabled={sound === "unavailable" || paused || status === "error"}
+          title={sound === "unavailable" ? "Phone audio unavailable" : sound === "playing" ? "Mute mirror audio" : "Play mirror audio"}
+          aria-label={sound === "playing" ? "Mute mirror audio" : "Play mirror audio"}
+          aria-pressed={sound === "playing"}
+          onClick={() => {
+            const player = audioRef.current;
+            if (!player) return;
+            if (sound === "playing") {
+              player.mute();
+              setSound("muted");
+            } else {
+              player.play().catch(() => setSound("blocked"));
+            }
+          }}
+        >
+          {sound === "playing" ? <Volume2 /> : <VolumeX />}
+        </Button>
         <NavButton title="Power (screen on/off)" onClick={key(KEY.power)}>
           <Power />
         </NavButton>
       </div>
+      {sound === "unavailable" && <span className="text-center text-[10px] text-muted-foreground">Phone audio unavailable</span>}
       {!canDecode && (
         <span className="text-center text-[10px] text-muted-foreground" title="Browsers only allow live video on HTTPS pages or on this PC (localhost).">
           Screenshot mode (~1/s). Smooth video needs HTTPS.

@@ -8,6 +8,8 @@
 //! - text  `{"type":"meta","name":"Pixel 6","codec":"h264"}` once
 //! - text  `{"type":"size","width":360,"height":800}` at start and on rotation
 //! - binary `[flags][H.264 Annex B bytes]` per packet; flags bit 0 = config (SPS/PPS), bit 1 = keyframe
+//! - binary `[0x04][PCM]` audio, when asked for: 16-bit little-endian stereo, 48 kHz
+//! - text  `{"type":"audio","ok":false}` when the phone can't capture audio (Android < 11)
 //! - text  `{"type":"error","message":"..."}` then close, when something fails
 //!
 //! From the page (text JSON), coordinates in video pixels:
@@ -26,6 +28,7 @@ use serde_json::json;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
+    sync::mpsc,
 };
 
 use crate::adb::{adb_path, run as adb};
@@ -65,7 +68,8 @@ impl Drop for Session {
 
 /// Blocking: push the server, forward a port, start it. Returns once the process is spawned.
 /// `light`: the page can't decode video (control only), so keep the stream tiny.
-fn start_server(serial: &str, max_size: u32, light: bool) -> Result<Session, String> {
+/// `audio`: also capture the phone's sound (raw PCM). Android 11+; the phone goes quiet meanwhile.
+fn start_server(serial: &str, max_size: u32, light: bool, audio: bool) -> Result<Session, String> {
     let version = scrcpy_version()?;
     let jar = crate::setup::scrcpy_server().ok_or("scrcpy-server is missing. Reinstall scrcpy from Setup.")?;
     // 31-bit id, unique per session so several viewers can run at once.
@@ -78,11 +82,12 @@ fn start_server(serial: &str, max_size: u32, light: bool) -> Result<Session, Str
     adb(serial, &["forward", &format!("tcp:{port}"), &format!("localabstract:scrcpy_{scid}")])?;
 
     let (fps, bit_rate) = if light { (5, 300_000) } else { (30, 4_000_000) };
+    let audio = if audio { "audio=true audio_codec=raw" } else { "audio=false" };
     let child = Command::new(adb_path())
         .args(["-s", serial, "shell"])
         .arg(format!(
             "CLASSPATH={remote} app_process / com.genymobile.scrcpy.Server {version} scid={scid} \
-             log_level=warn tunnel_forward=true audio=false control=true video_codec=h264 \
+             log_level=warn tunnel_forward=true {audio} control=true video_codec=h264 \
              max_size={max_size} max_fps={fps} video_bit_rate={bit_rate} power_off_on_close=false"
         ))
         .stdin(Stdio::null())
@@ -108,24 +113,44 @@ async fn connect_video(port: u16) -> Result<TcpStream, String> {
     Err("The phone's screen server didn't start. Is the phone unlocked and connected?".into())
 }
 
+/// What the page asked for.
+#[derive(Clone, Copy)]
+pub struct Options {
+    pub max_size: u32,
+    /// false = control only: the page shows screenshots (no WebCodecs, e.g. a plain-HTTP page
+    /// on another device) but still gets sizes and sends input.
+    pub video: bool,
+    pub audio: bool,
+}
+
 /// Runs one mirror session for `socket` until either side closes.
-/// `send_video: false` is control only: the page shows screenshots (it has no WebCodecs,
-/// e.g. plain-HTTP pages on another device) but still gets sizes and sends input.
-pub async fn serve(mut socket: WebSocket, serial: String, max_size: u32, send_video: bool) {
-    if let Err(e) = run(&mut socket, serial, max_size, send_video).await {
+pub async fn serve(mut socket: WebSocket, serial: String, opts: Options) {
+    if let Err(e) = run(&mut socket, serial, opts).await {
         let _ = socket.send(Message::Text(json!({ "type": "error", "message": e }).to_string().into())).await;
     }
     let _ = socket.send(Message::Close(None)).await;
 }
 
-async fn run(socket: &mut WebSocket, serial: String, max_size: u32, send_video: bool) -> Result<(), String> {
+/// From the reader tasks to the WebSocket loop.
+enum Out {
+    Send(Message),
+    Fail(String),
+}
+
+async fn run(socket: &mut WebSocket, serial: String, opts: Options) -> Result<(), String> {
     let s = serial.clone();
-    let session = tauri::async_runtime::spawn_blocking(move || start_server(&s, max_size, !send_video))
+    let session = tauri::async_runtime::spawn_blocking(move || start_server(&s, opts.max_size, !opts.video, opts.audio))
         .await
         .map_err(|e| e.to_string())??;
 
+    // The server accepts its sockets in this order: video, audio (if on), control.
     let mut video = connect_video(session.port).await?;
-    let mut control = TcpStream::connect(("127.0.0.1", session.port)).await.map_err(|e| e.to_string())?;
+    let audio = if opts.audio {
+        Some(TcpStream::connect(("127.0.0.1", session.port)).await.map_err(io)?)
+    } else {
+        None
+    };
+    let mut control = TcpStream::connect(("127.0.0.1", session.port)).await.map_err(io)?;
 
     let mut name = [0u8; 64];
     video.read_exact(&mut name).await.map_err(io)?;
@@ -135,42 +160,109 @@ async fn run(socket: &mut WebSocket, serial: String, max_size: u32, send_video: 
     let meta = json!({ "type": "meta", "name": name, "codec": String::from_utf8_lossy(&codec) });
     socket.send(Message::Text(meta.to_string().into())).await.map_err(io)?;
 
-    let mut header = [0u8; 12];
-    loop {
+    // Readers run in their own tasks: a read cut short by `select!` would lose stream bytes.
+    let (tx, mut rx) = mpsc::channel::<Out>(64);
+    let mut tasks = vec![tauri::async_runtime::spawn(read_video(video, opts.video, tx.clone()))];
+    if let Some(a) = audio {
+        tasks.push(tauri::async_runtime::spawn(read_audio(a, tx.clone())));
+    }
+    drop(tx);
+
+    let result = 'relay: loop {
         tokio::select! {
-            r = video.read_exact(&mut header) => {
-                r.map_err(|_| "The phone closed the screen stream".to_string())?;
-                match parse_header(&header) {
-                    Header::Size { width, height } => {
-                        let msg = json!({ "type": "size", "width": width, "height": height });
-                        socket.send(Message::Text(msg.to_string().into())).await.map_err(io)?;
-                    }
-                    Header::Packet { config, key, size } => {
-                        let mut buf = vec![0u8; size + 1];
-                        buf[0] = u8::from(config) | (u8::from(key) << 1);
-                        video.read_exact(&mut buf[1..]).await.map_err(io)?;
-                        if send_video {
-                            socket.send(Message::Binary(buf.into())).await.map_err(io)?;
-                        }
+            out = rx.recv() => match out {
+                Some(Out::Send(m)) => {
+                    if socket.send(m).await.is_err() {
+                        break Ok(());
                     }
                 }
-            }
+                Some(Out::Fail(e)) => break Err(e),
+                None => break Err("The phone closed the screen stream".into()),
+            },
             msg = socket.recv() => match msg {
                 Some(Ok(Message::Text(text))) => {
                     if let Ok(input) = serde_json::from_str::<Input>(&text) {
                         for bytes in encode(&input) {
-                            control.write_all(&bytes).await.map_err(io)?;
+                            if let Err(e) = control.write_all(&bytes).await {
+                                break 'relay Err(format!("Phone control stopped: {e}"));
+                            }
                         }
                     }
                 }
                 Some(Ok(_)) => {}
-                // Page closed: drop the session (kills the server, removes the forward).
-                _ => break,
+                // Page closed: end the session (kills the server, removes the forward).
+                _ => break Ok(()),
             },
         }
+    };
+    for t in tasks {
+        t.abort();
     }
     drop(session);
-    Ok(())
+    result
+}
+
+async fn read_video(mut video: TcpStream, send_video: bool, tx: mpsc::Sender<Out>) {
+    let mut header = [0u8; 12];
+    loop {
+        if video.read_exact(&mut header).await.is_err() {
+            let _ = tx.send(Out::Fail("The phone closed the screen stream".into())).await;
+            return;
+        }
+        let out = match parse_header(&header) {
+            Header::Size { width, height } => {
+                Some(Message::Text(json!({ "type": "size", "width": width, "height": height }).to_string().into()))
+            }
+            Header::Packet { config, key, size } => {
+                let mut buf = vec![0u8; size + 1];
+                buf[0] = u8::from(config) | (u8::from(key) << 1);
+                if video.read_exact(&mut buf[1..]).await.is_err() {
+                    let _ = tx.send(Out::Fail("The phone closed the screen stream".into())).await;
+                    return;
+                }
+                send_video.then(|| Message::Binary(buf.into()))
+            }
+        };
+        if let Some(m) = out {
+            if tx.send(Out::Send(m)).await.is_err() {
+                return;
+            }
+        }
+    }
+}
+
+/// Audio flag in the first byte of binary messages (video uses bits 0–1).
+const AUDIO: u8 = 0x04;
+
+async fn read_audio(mut audio: TcpStream, tx: mpsc::Sender<Out>) {
+    let mut codec = [0u8; 4];
+    // 0 = audio off, 1 = capture failed (e.g. Android < 11); otherwise the codec ("\0raw").
+    let ok = audio.read_exact(&mut codec).await.is_ok() && u32::from_be_bytes(codec) > 1;
+    if !ok {
+        let msg = json!({ "type": "audio", "ok": false }).to_string();
+        let _ = tx.send(Out::Send(Message::Text(msg.into()))).await;
+        return;
+    }
+    let mut header = [0u8; 12];
+    loop {
+        if audio.read_exact(&mut header).await.is_err() {
+            return; // Sound stopped; keep the screen going.
+        }
+        let Header::Packet { config, size, .. } = parse_header(&header) else { continue };
+        let mut buf = vec![0u8; size + 1];
+        buf[0] = AUDIO;
+        if audio.read_exact(&mut buf[1..]).await.is_err() {
+            return;
+        }
+        if config {
+            continue; // Codec setup; raw PCM has none worth sending.
+        }
+        // Drop sound rather than queue it if the page is slow: late audio is worse than a gap.
+        match tx.try_send(Out::Send(Message::Binary(buf.into()))) {
+            Err(mpsc::error::TrySendError::Closed(_)) => return,
+            _ => continue,
+        }
+    }
 }
 
 fn io(e: impl std::fmt::Display) -> String {
