@@ -84,6 +84,32 @@ const MIGRATIONS: &[&str] = &[r#"
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );
+"#, r#"
+    CREATE TABLE schedules (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        name       TEXT NOT NULL,
+        enabled    INTEGER NOT NULL DEFAULT 1,
+        -- NULL = all accounts. Not a foreign key: a deleted group disables the schedule (below).
+        group_id   INTEGER,
+        days       INTEGER NOT NULL,          -- bit 0 = Sunday ... bit 6 = Saturday
+        times      TEXT NOT NULL,             -- JSON ["09:00", ...]
+        minutes    INTEGER NOT NULL,
+        jitter_min INTEGER NOT NULL DEFAULT 0
+    );
+    -- Never silently widen a group schedule to every account.
+    CREATE TRIGGER schedules_group_deleted AFTER DELETE ON account_groups BEGIN
+        UPDATE schedules SET enabled = 0 WHERE group_id = OLD.id;
+    END;
+    CREATE TABLE schedule_runs (
+        id          INTEGER PRIMARY KEY,
+        schedule_id INTEGER NOT NULL,
+        slot        TEXT NOT NULL,
+        status      TEXT NOT NULL,            -- running | done | skipped | stopped
+        results     TEXT,
+        started_at  TEXT NOT NULL DEFAULT (datetime('now')),
+        finished_at TEXT,
+        UNIQUE (schedule_id, slot)
+    );
 "#];
 
 #[derive(Serialize)]
@@ -133,6 +159,11 @@ impl Db {
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "foreign_keys", true)?;
         migrate(&mut conn)?;
+        // Scheduled runs cut off the same way.
+        conn.execute(
+            "UPDATE schedule_runs SET status = 'stopped', finished_at = datetime('now') WHERE status = 'running'",
+            [],
+        )?;
         // Runs left 'running' by a crash or forced quit can never finish now.
         conn.execute(
             "UPDATE job_runs SET status = 'error', error = 'App closed before the job finished',
@@ -142,7 +173,7 @@ impl Db {
         Ok(Self(Mutex::new(conn)))
     }
 
-    fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
+    pub(crate) fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
         // A panic while holding the lock leaves the connection usable; keep going.
         self.0.lock().unwrap_or_else(|e| e.into_inner())
     }

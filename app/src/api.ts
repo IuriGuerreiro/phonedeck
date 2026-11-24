@@ -115,6 +115,42 @@ export type SafetyLimits = {
   breakLengthMax: number;
 };
 
+/** A timed warm-up for all accounts or one group. */
+export type Schedule = {
+  id: number | null;
+  name: string;
+  enabled: boolean;
+  /** null = every account. */
+  groupId: number | null;
+  /** 0 = Sunday … 6 = Saturday. */
+  days: number[];
+  /** "HH:MM", local time of the PC running PhoneDeck. */
+  times: string[];
+  minutes: number;
+  /** Starts up to this many minutes late, at random. */
+  jitterMin: number;
+};
+
+export type UpcomingRun = { scheduleId: number; name: string; date: string; at: string };
+
+export type ScheduleRunResult = {
+  account: string;
+  serial: string;
+  result: "ok" | "skipped" | "error";
+  note: string;
+};
+
+export type ScheduleRun = {
+  id: number;
+  scheduleId: number;
+  name: string;
+  slot: string;
+  status: "running" | "done" | "skipped" | "stopped";
+  startedAt: string;
+  finishedAt: string | null;
+  results: ScheduleRunResult[];
+};
+
 /** One account's warm-up use today. */
 export type Usage = { likes: number; follows: number; minutes: number };
 
@@ -139,6 +175,15 @@ export const api = {
   /** PNG bytes of the phone's screen. Empty when the screen is off. */
   screenshot: (serial: string) => invoke<ArrayBuffer>("screenshot", { serial }),
   wakeScreen: (serial: string) => invoke<void>("wake_screen", { serial }),
+  listSchedules: () => invoke<Schedule[]>("list_schedules"),
+  saveSchedule: (schedule: Schedule) => invoke<Schedule>("save_schedule", { schedule }),
+  deleteSchedule: (id: number) => invoke<void>("delete_schedule", { id }),
+  upcomingRuns: (limit = 10) => invoke<UpcomingRun[]>("upcoming_runs", { limit }),
+  scheduleRuns: (limit = 20) => invoke<ScheduleRun[]>("schedule_runs", { limit }),
+  runScheduleNow: (id: number) => invoke<number>("run_schedule_now", { id }),
+  stopScheduleRun: (id: number) => invoke<void>("stop_schedule_run", { id }),
+  getWarmup: () => invoke<unknown>("get_warmup"),
+  setWarmup: (value: unknown) => invoke<void>("set_warmup", { value }),
   getSafety: () => invoke<SafetyLimits>("get_safety"),
   setSafety: (safety: SafetyLimits) => invoke<SafetyLimits>("set_safety", { safety }),
   usageToday: (serial: string, username: string) => invoke<Usage>("usage_today", { serial, username }),

@@ -7,6 +7,7 @@ import { feature as controlRoom } from "./control-room";
 import { feature as dashboard } from "./dashboard";
 import { feature as devices } from "./devices";
 import { feature as posting } from "./posting";
+import { feature as schedule } from "./schedule";
 import { feature as setup } from "./setup";
 import { feature as videoAnalytics } from "./video-analytics";
 
@@ -23,6 +24,7 @@ export const features: Feature[] = [
   devices,
   controlRoom,
   accounts,
+  schedule,
   posting,
   accountAnalytics,
   videoAnalytics,

@@ -1,6 +1,9 @@
-// Warm-up settings shared by the settings modal and the accounts page.
-// Saved in localStorage so they survive a reload.
+// Warm-up settings shared by the settings modal, the accounts page and the scheduler.
+// Saved by the app (SQLite) so scheduled warm-ups use them too.
 import { useSyncExternalStore } from "react";
+import { toast } from "sonner";
+
+import { api } from "@/api";
 
 /** Form values, kept as typed strings so fields can be cleared while editing. */
 export type WarmupForm = {
@@ -32,33 +35,53 @@ export const WARMUP_DEFAULTS: WarmupForm = {
   keywords: "",
 };
 
-const STORAGE_KEY = "phonedeck.warmup";
+/** Where settings lived before they moved to the app; copied over once. */
+const OLD_STORAGE_KEY = "phonedeck.warmup";
 const listeners = new Set<() => void>();
+const emit = () => listeners.forEach((l) => l());
+let form: WarmupForm = WARMUP_DEFAULTS;
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
-let form: WarmupForm = load();
-
-function load(): WarmupForm {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? { ...WARMUP_DEFAULTS, ...JSON.parse(saved) } : WARMUP_DEFAULTS;
-  } catch {
-    return WARMUP_DEFAULTS;
-  }
+function load() {
+  api.getWarmup().then(
+    (saved) => {
+      const f = (saved as { form?: Partial<WarmupForm> } | null)?.form;
+      if (f) {
+        form = { ...WARMUP_DEFAULTS, ...f };
+        emit();
+        return;
+      }
+      // Nothing saved yet: bring over this browser's old settings, if any.
+      try {
+        const old = localStorage.getItem(OLD_STORAGE_KEY);
+        if (old) setWarmup({ ...WARMUP_DEFAULTS, ...JSON.parse(old) });
+      } catch {
+        // Ignore unreadable old settings.
+      }
+    },
+    () => {},
+  );
 }
+load();
 
 export function setWarmup(next: WarmupForm) {
   form = next;
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(form));
-  } catch {
-    // Not saved; still works for this session.
-  }
-  listeners.forEach((l) => l());
+  emit();
+  // Number fields fire per key; save once typing settles.
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    api.setWarmup({ form, options: toOptions(form) }).catch((e) => toast.error(`Couldn't save warm-up settings: ${e}`));
+  }, 400);
 }
 
 export function useWarmupSettings() {
   return useSyncExternalStore(
-    (l) => (listeners.add(l), () => listeners.delete(l)),
+    (l) => {
+      listeners.add(l);
+      // Pick up edits made elsewhere (another browser, the desktop window).
+      if (listeners.size === 1) load();
+      return () => listeners.delete(l);
+    },
     () => form,
   );
 }

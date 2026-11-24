@@ -3,6 +3,7 @@ mod db;
 mod live;
 mod mirror;
 mod safety;
+mod scheduler;
 mod setup;
 mod stats;
 mod viewer;
@@ -88,13 +89,16 @@ async fn restart_worker(app: AppHandle) -> CmdResult<()> {
 /// account it was about (if any).
 /// `job` is e.g. `{ "action": "warmup", "platform": "tiktok", "username": "x", "minutes": 10 }`.
 #[tauri::command]
-async fn run_job(
-    db: State<'_, Db>,
-    worker: State<'_, Worker>,
-    live: State<'_, live::Live>,
-    serial: String,
-    job: Value,
-) -> CmdResult<Value> {
+async fn run_job(app: AppHandle, serial: String, job: Value) -> CmdResult<Value> {
+    execute_job(&app, serial, job).await
+}
+
+/// What `run_job` does; the scheduler calls it too, so its jobs get the same groups,
+/// safety limits, logging and live status as clicks in the UI.
+pub(crate) async fn execute_job(app: &AppHandle, serial: String, job: Value) -> CmdResult<Value> {
+    let db = app.state::<Db>();
+    let worker = app.state::<Worker>();
+    let live = app.state::<live::Live>();
     let mut job = match job {
         Value::Object(map) => map,
         _ => return Err("job must be an object".into()),
@@ -127,6 +131,54 @@ async fn run_job(
 async fn stop_job(worker: State<'_, Worker>, serial: String) -> CmdResult<()> {
     let job = serde_json::json!({ "action": "stop", "serial": serial });
     worker.run(job, Duration::from_secs(10)).await.map(|_| ()).map_err(|e| e.message)
+}
+
+#[tauri::command(async)]
+fn list_schedules(db: State<'_, Db>) -> CmdResult<Vec<scheduler::Schedule>> {
+    db.schedules()
+}
+
+#[tauri::command(async)]
+fn save_schedule(db: State<'_, Db>, schedule: scheduler::Schedule) -> CmdResult<scheduler::Schedule> {
+    db.save_schedule(schedule)
+}
+
+#[tauri::command(async)]
+fn delete_schedule(db: State<'_, Db>, id: i64) -> CmdResult<()> {
+    db.delete_schedule(id)
+}
+
+#[tauri::command(async)]
+fn upcoming_runs(db: State<'_, Db>, limit: Option<usize>) -> CmdResult<Vec<scheduler::Upcoming>> {
+    scheduler::upcoming(&db, limit.unwrap_or(10))
+}
+
+#[tauri::command(async)]
+fn schedule_runs(db: State<'_, Db>, limit: Option<u32>) -> CmdResult<Vec<scheduler::ScheduleRun>> {
+    db.schedule_runs(limit.unwrap_or(20))
+}
+
+/// Runs a schedule right away. Returns the new run's id.
+#[tauri::command(async)]
+fn run_schedule_now(app: AppHandle, id: i64) -> CmdResult<i64> {
+    scheduler::run_now(&app, id)
+}
+
+#[tauri::command]
+async fn stop_schedule_run(app: AppHandle, id: i64) -> CmdResult<()> {
+    scheduler::stop(&app, id).await;
+    Ok(())
+}
+
+/// Settings → Warm-up as the UI saved it (`{form, options}`), or null.
+#[tauri::command(async)]
+fn get_warmup(db: State<'_, Db>) -> CmdResult<Value> {
+    db.warmup_settings()
+}
+
+#[tauri::command(async)]
+fn set_warmup(db: State<'_, Db>, value: Value) -> CmdResult<()> {
+    db.set_warmup_settings(&value)
 }
 
 #[tauri::command(async)]
@@ -251,6 +303,8 @@ pub fn run() {
             // Last: it serves the state managed above.
             let web = web::start(app.handle(), &data_dir);
             app.manage(web);
+            app.manage(scheduler::Scheduler::default());
+            scheduler::start(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -263,6 +317,15 @@ pub fn run() {
             list_groups,
             get_safety,
             set_safety,
+            list_schedules,
+            save_schedule,
+            delete_schedule,
+            upcoming_runs,
+            schedule_runs,
+            run_schedule_now,
+            stop_schedule_run,
+            get_warmup,
+            set_warmup,
             usage_today,
             save_group,
             delete_group,

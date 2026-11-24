@@ -218,7 +218,7 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
         }
         "worker_status" => to_json(Ok(crate::worker_status(app.state()))),
         "restart_worker" => to_json(crate::restart_worker(app.clone()).await),
-        "run_job" => to_json(crate::run_job(app.state(), app.state(), app.state(), arg(&a, "serial")?, arg(&a, "job")?).await),
+        "run_job" => to_json(crate::execute_job(app, arg(&a, "serial")?, arg(&a, "job")?).await),
         "stop_job" => to_json(crate::stop_job(app.state(), arg(&a, "serial")?).await),
         "account_snapshots" => to_json(blocking(app, |x| crate::account_snapshots(x.state())).await?),
         "list_groups" => to_json(blocking(app, |x| crate::list_groups(x.state())).await?),
@@ -271,6 +271,33 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
         "usage_today" => {
             let (serial, username): (String, String) = (arg(&a, "serial")?, arg(&a, "username")?);
             to_json(blocking(app, move |x| crate::usage_today(x.state(), serial, username)).await?)
+        }
+        "list_schedules" => to_json(blocking(app, |x| crate::list_schedules(x.state())).await?),
+        "save_schedule" => {
+            let schedule: crate::scheduler::Schedule = arg(&a, "schedule")?;
+            to_json(blocking(app, move |x| crate::save_schedule(x.state(), schedule)).await?)
+        }
+        "delete_schedule" => {
+            let id: i64 = arg(&a, "id")?;
+            to_json(blocking(app, move |x| crate::delete_schedule(x.state(), id)).await?)
+        }
+        "upcoming_runs" => {
+            let limit: Option<usize> = arg(&a, "limit")?;
+            to_json(blocking(app, move |x| crate::upcoming_runs(x.state(), limit)).await?)
+        }
+        "schedule_runs" => {
+            let limit: Option<u32> = arg(&a, "limit")?;
+            to_json(blocking(app, move |x| crate::schedule_runs(x.state(), limit)).await?)
+        }
+        "run_schedule_now" => {
+            let id: i64 = arg(&a, "id")?;
+            to_json(blocking(app, move |x| crate::run_schedule_now(x.clone(), id)).await?)
+        }
+        "stop_schedule_run" => to_json(crate::stop_schedule_run(app.clone(), arg(&a, "id")?).await),
+        "get_warmup" => to_json(blocking(app, |x| crate::get_warmup(x.state())).await?),
+        "set_warmup" => {
+            let value: Value = arg(&a, "value")?;
+            to_json(blocking(app, move |x| crate::set_warmup(x.state(), value)).await?)
         }
         other => Err(format!("Unknown command: {other}")),
     }
