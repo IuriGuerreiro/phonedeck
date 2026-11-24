@@ -32,6 +32,7 @@ export type Job =
   | { action: "open_app"; serial: string; package: string }
   | { action: "swipe_up"; serial: string }
   | { action: "list_accounts"; serial: string; platform: string }
+  | { action: "account_analytics"; serial: string; platform: string; username: string }
   | { action: "switch_account"; serial: string; platform: string; username: string }
   | ({ action: "warmup"; serial: string; platform: string; username?: string } & WarmupOptions)
   | { action: "stop"; serial: string };
@@ -56,6 +57,14 @@ export function runJob(job: Job): Promise<unknown> {
           return { accounts: await p.listAccounts(s) };
         }),
       );
+    case "account_analytics":
+      return withDevice(job.serial, (s) => guard(s, job.serial, async () => {
+        const p = platform(job.platform);
+        await switchTo(s, job.serial, p, job.username);
+        const stats = await p.readAccountStats(s);
+        if (stats.username.toLowerCase() !== job.username.toLowerCase()) throw new Error("TikTok profile does not match the requested account");
+        return stats;
+      }));
     case "switch_account":
       return withDevice(job.serial, (s) =>
         guard(s, job.serial, async () => {

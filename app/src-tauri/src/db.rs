@@ -4,6 +4,16 @@ use std::{path::Path, sync::Mutex};
 use rusqlite::{params, Connection};
 use serde::Serialize;
 
+#[derive(Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountSnapshot {
+    pub account_id: i64,
+    pub captured_at: String,
+    pub followers: i64,
+    pub following: i64,
+    pub likes: i64,
+}
+
 pub struct Db(Mutex<Connection>);
 
 /// Each entry runs once, in order. Append new migrations; never edit old ones.
@@ -39,6 +49,16 @@ const MIGRATIONS: &[&str] = &[r#"
         created_at     TEXT NOT NULL DEFAULT (datetime('now')),
         UNIQUE (serial, platform, username)
     );
+"#, r#"
+    CREATE TABLE account_snapshots (
+        id INTEGER PRIMARY KEY,
+        account_id INTEGER NOT NULL,
+        captured_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+        followers INTEGER NOT NULL CHECK(followers >= 0),
+        following INTEGER NOT NULL CHECK(following >= 0),
+        likes INTEGER NOT NULL CHECK(likes >= 0)
+    );
+    CREATE INDEX account_snapshots_account ON account_snapshots(account_id, id);
 "#];
 
 #[derive(Serialize)]
@@ -177,6 +197,20 @@ impl Db {
         rows.collect()
     }
 
+    pub fn save_account_snapshot(&self, serial: &str, platform: &str, username: &str, followers: i64, following: i64, likes: i64) -> rusqlite::Result<()> {
+        self.conn().execute("INSERT INTO account_snapshots(account_id, followers, following, likes)
+            SELECT id, ?4, ?5, ?6 FROM accounts WHERE serial = ?1 AND platform = ?2 AND username = ?3",
+            params![serial, platform, username, followers, following, likes])?;
+        Ok(())
+    }
+
+    pub fn account_snapshots(&self) -> rusqlite::Result<Vec<AccountSnapshot>> {
+        let conn = self.conn();
+        let mut stmt = conn.prepare("SELECT s.account_id, s.captured_at, s.followers, s.following, s.likes FROM account_snapshots s JOIN accounts a ON a.id = s.account_id ORDER BY s.id")?;
+        let rows = stmt.query_map([], |r| Ok(AccountSnapshot { account_id: r.get(0)?, captured_at: r.get(1)?, followers: r.get(2)?, following: r.get(3)?, likes: r.get(4)? }))?;
+        rows.collect()
+    }
+
     pub fn delete_account(&self, id: i64) -> rusqlite::Result<()> {
         self.conn().execute("DELETE FROM accounts WHERE id = ?1", [id])?;
         Ok(())
@@ -239,6 +273,27 @@ fn migrate(conn: &mut Connection) -> rusqlite::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshots_persist_and_belong_to_the_account() {
+        let db = Db::open(Path::new(":memory:")).unwrap();
+        db.upsert_account("A", "tiktok", "one", AccountEvent::Seen).unwrap();
+        db.upsert_account("B", "tiktok", "two", AccountEvent::Seen).unwrap();
+        db.save_account_snapshot("A", "tiktok", "one", 10, 3, 100).unwrap();
+        db.save_account_snapshot("A", "tiktok", "one", 12, 4, 105).unwrap();
+        let rows = db.account_snapshots().unwrap();
+        let account = db.accounts(Some("A")).unwrap().remove(0);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].account_id, account.id);
+        assert_eq!(rows[0].followers, 10);
+        assert_eq!(rows[1].followers, 12);
+        assert_eq!(rows[1].following, 4);
+        assert_eq!(rows[1].likes, 105);
+        assert!(rows[0].captured_at.ends_with('Z'));
+        assert!(db.save_account_snapshot("A", "tiktok", "one", -1, 0, 0).is_err());
+        db.delete_account(account.id).unwrap();
+        assert!(db.account_snapshots().unwrap().is_empty());
+    }
 
     #[test]
     fn lists_accounts_for_one_phone_or_all() {

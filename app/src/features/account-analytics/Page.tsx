@@ -1,165 +1,60 @@
-// How each account is growing: followers, views and engagement, plus a comparison table.
 import { useEffect, useState } from "react";
-
-import { BarChart, LineChart } from "@/components/shared/charts";
+import { api, type Account, type AccountSnapshot } from "@/api";
+import { LineChart } from "@/components/shared/charts";
 import { StatTile } from "@/components/shared/StatTile";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import { engagement, fmtNum, usePosts, videoStats } from "@/mocks/posts";
-import { accountHealth } from "../accounts/health";
-import { HealthBadge } from "../accounts/HealthBadge";
-import { accountsApi, type Account, type DayStat } from "@/mocks/accounts";
-
-const RANGES = [7, 30] as const;
-const dayLabel = (iso: string) => new Date(iso).toLocaleDateString([], { day: "numeric", month: "short" });
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function AccountAnalyticsPage() {
-  const posts = usePosts();
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [history, setHistory] = useState<Record<number, DayStat[]>>({});
+  const [snapshots, setSnapshots] = useState<AccountSnapshot[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
-  const [range, setRange] = useState<(typeof RANGES)[number]>(30);
-
-  useEffect(() => {
-    accountsApi.list().then(async (list) => {
-      setAccounts(list);
-      setSelected((s) => s ?? list[0]?.id ?? null);
-      const all = await Promise.all(list.map((a) => accountsApi.history(a.id, 30)));
-      setHistory(Object.fromEntries(list.map((a, i) => [a.id, all[i]])));
-    });
-  }, []);
-
-  const since = Date.now() - range * 86_400_000;
-
-  /** Per-account numbers for the chosen range. */
-  function summary(a: Account) {
-    const h = (history[a.id] ?? []).slice(-range);
-    const gained = h.length ? h[h.length - 1].followers - h[0].followers : 0;
-    const mine = posts.filter((p) => p.accountId === a.id && p.status === "posted");
-    const inRange = mine.filter((p) => new Date(p.at).getTime() >= since);
-    const stats = inRange.map((p) => videoStats(p)!);
-    const views = stats.reduce((s, x) => s + x.views, 0);
-    const eng = stats.length ? stats.reduce((s, x) => s + engagement(x), 0) / stats.length : 0;
-    // Views per day across all this account's videos.
-    const viewsByDay = new Map<string, number>();
-    for (const p of mine) for (const d of videoStats(p)!.daily) viewsByDay.set(d.date, (viewsByDay.get(d.date) ?? 0) + d.views);
-    return { h, gained, posts: inRange.length, views, eng, viewsByDay };
+  const [range, setRange] = useState(30);
+  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  async function load() {
+    const [list, history] = await Promise.all([api.listAccounts(), api.accountSnapshots()]);
+    setAccounts(list);
+    setSnapshots(history);
+    setSelected((id) => list.some((a) => a.id === id) ? id : list[0]?.id ?? null);
   }
-
+  useEffect(() => { load().catch((e: unknown) => setError(String(e))).finally(() => setLoading(false)); }, []);
   const account = accounts.find((a) => a.id === selected);
-  const sel = account ? summary(account) : null;
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-lg font-semibold">Account analytics</h1>
-        <div className="flex gap-1">
-          {RANGES.map((r) => (
-            <Button key={r} size="sm" variant={range === r ? "secondary" : "ghost"} onClick={() => setRange(r)}>
-              {r}d
-            </Button>
-          ))}
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1">
-        {accounts.map((a) => (
-          <Button key={a.id} size="sm" variant={selected === a.id ? "secondary" : "ghost"} onClick={() => setSelected(a.id)}>
-            @{a.username}
-          </Button>
-        ))}
-      </div>
-
-      {account && sel && (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-            <StatTile label="Followers" value={fmtNum(account.followers)} />
-            <StatTile label="Gained" value={`${sel.gained >= 0 ? "+" : ""}${fmtNum(sel.gained)}`} sub={`Last ${range}d`} />
-            <StatTile label="Posts" value={String(sel.posts)} sub={`Last ${range}d`} />
-            <StatTile label="Views" value={fmtNum(sel.views)} sub={`Last ${range}d`} />
-            <StatTile label="Engagement" value={`${(sel.eng * 100).toFixed(1)}%`} />
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle>Followers</CardTitle>
-                <CardDescription>@{account.username}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {sel.h.length ? (
-                  <LineChart unit="followers" data={sel.h.map((d) => ({ label: dayLabel(d.date), value: d.followers }))} />
-                ) : (
-                  <p className="text-sm text-muted-foreground">Loading…</p>
-                )}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle>Daily views</CardTitle>
-                <CardDescription>@{account.username}</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {sel.h.length ? (
-                  <BarChart unit="views" data={sel.h.map((d) => ({ label: dayLabel(d.date), value: sel.viewsByDay.get(d.date) ?? 0 }))} />
-                ) : (
-                  <p className="text-sm text-muted-foreground">Loading…</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>All accounts</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Account</TableHead>
-                <TableHead className="text-right">Followers</TableHead>
-                <TableHead className="text-right">Gained</TableHead>
-                <TableHead className="text-right">Posts</TableHead>
-                <TableHead className="text-right">Views</TableHead>
-                <TableHead className="text-right">Avg views</TableHead>
-                <TableHead className="text-right">Engagement</TableHead>
-                <TableHead>Health</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {accounts.map((a) => {
-                const s = summary(a);
-                return (
-                  <TableRow
-                    key={a.id}
-                    className={cn("cursor-pointer", a.id === selected && "bg-muted/50")}
-                    onClick={() => setSelected(a.id)}
-                  >
-                    <TableCell className="font-medium">@{a.username}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmtNum(a.followers)}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {s.gained >= 0 ? "+" : ""}
-                      {fmtNum(s.gained)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{s.posts}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmtNum(s.views)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{s.posts ? fmtNum(Math.round(s.views / s.posts)) : "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">{s.posts ? `${(s.eng * 100).toFixed(1)}%` : "—"}</TableCell>
-                    <TableCell>
-                      <HealthBadge health={accountHealth(a)} />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+  const all = snapshots.filter((s) => s.accountId === selected);
+  const latest = all[all.length - 1];
+  const history = all.filter((s) => Date.parse(s.capturedAt) >= Date.now() - range * 86400000);
+  const first = history[0];
+  const gained = first && history.length > 1 && latest ? latest.followers - first.followers : null;
+  async function refresh() {
+    if (!account) return;
+    setBusy(true); setError(null);
+    try {
+      await api.runJob(account.serial, { action: "account_analytics", platform: account.platform, username: account.username });
+      await load();
+    } catch (e) { setError(String(e)); }
+    finally { setBusy(false); }
+  }
+  return <div className="flex flex-col gap-4">
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <h1 className="text-lg font-semibold">Account analytics</h1>
+      <Button disabled={!account || busy || loading} onClick={refresh}>{busy ? "Reading phone…" : "Refresh from phone"}</Button>
     </div>
-  );
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    {loading ? <p>Loading accounts…</p> : !accounts.length && <p className="text-sm text-muted-foreground">Sync accounts from the Accounts page to get started.</p>}
+    <div className="flex flex-wrap gap-1">{accounts.map((a) => <Button key={a.id} disabled={busy} size="sm" variant={selected === a.id ? "secondary" : "ghost"} onClick={() => setSelected(a.id)}>@{a.username} · {a.serial}</Button>)}</div>
+    {account && <>
+      <p className="text-sm text-muted-foreground">{latest ? `Last read ${new Date(latest.capturedAt).toLocaleString()}. Counts may be rounded by TikTok.` : "No measurements yet. Refresh to read this account from its phone."}</p>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatTile label="Followers" value={latest?.followers.toLocaleString() ?? "—"} />
+        <StatTile label="Following" value={latest?.following.toLocaleString() ?? "—"} />
+        <StatTile label="Total likes" value={latest?.likes.toLocaleString() ?? "—"} />
+        <StatTile label="Followers gained" value={gained === null ? "—" : `${gained >= 0 ? "+" : ""}${gained.toLocaleString()}`} sub={`Between saved readings in the last ${range} days`} />
+      </div>
+      <Card><CardHeader><CardTitle>Follower history</CardTitle></CardHeader><CardContent>
+        <div className="mb-4 flex gap-1">{[7, 30].map((r) => <Button key={r} size="sm" variant={range === r ? "secondary" : "ghost"} onClick={() => setRange(r)}>{r}d</Button>)}</div>
+        {history.length > 1 ? <LineChart unit="followers" data={history.map((s) => ({ label: new Date(s.capturedAt).toLocaleString(), value: s.followers }))} /> : <p className="text-sm text-muted-foreground">At least two readings are needed to show growth. Refresh again later to build history.</p>}
+      </CardContent></Card>
+    </>}
+  </div>;
 }

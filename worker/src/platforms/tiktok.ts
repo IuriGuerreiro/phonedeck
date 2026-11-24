@@ -141,6 +141,16 @@ async function openSearchResults(s: Browser, keyword: string) {
   }
 }
 
+export function parseProfileCount(text: string): number {
+  const match = text.trim().replace(/\s+/g, "").match(/^(\d+(?:[.,]\d+)*)([kKmMbB]|mil|mi)?$/);
+  if (!match) throw new Error(`Unrecognized TikTok count: ${text}`);
+  const suffix = match[2]?.toLowerCase();
+  const numeric = suffix ? match[1].replace(",", ".") : match[1].replace(/[.,]/g, "");
+  const value = Number(numeric) * (suffix === "k" || suffix === "mil" ? 1000 : suffix === "m" || suffix === "mi" ? 1e6 : suffix === "b" ? 1e9 : 1);
+  if (!Number.isSafeInteger(Math.round(value))) throw new Error(`Invalid TikTok count: ${text}`);
+  return Math.round(value);
+}
+
 export const tiktok: Platform = {
   id: "tiktok",
   package: PKG,
@@ -165,6 +175,23 @@ export const tiktok: Platform = {
     await btn.click();
     await sleep(800);
     return true;
+  },
+
+  async readAccountStats(s) {
+    await openProfile(s);
+    const handle = await findAny(s, [byText("^@.+")], 5000);
+    if (!handle) throw new Error("TikTok profile username not found");
+    const username = (await handle.getText()).replace(/^@/, "").replace(/[\uFFFC-\uFFFD]/g, "").trim();
+    const read = async (labels: string[]) => {
+      const label = await findAny(s, [byText(labelRe(...labels))], 5000);
+      if (!label) throw new Error(`Profile metric not found: ${labels[0]}`);
+      const text = await label.getText();
+      const value = await s.$(`//*[@text=${JSON.stringify(text)}]/../*[1]`).getText();
+      return parseProfileCount(value);
+    };
+    return { username, following: await read(["Following", "A seguir", "Siguiendo"]),
+      followers: await read(["Followers", "Follower", "Seguidores", "Seguidor"]),
+      likes: await read(["Likes", "Gostos", "Me gusta"]) };
   },
 
   async listAccounts(s) {

@@ -218,6 +218,7 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
         "restart_worker" => to_json(crate::restart_worker(app.clone()).await),
         "run_job" => to_json(crate::run_job(app.state(), app.state(), app.state(), arg(&a, "serial")?, arg(&a, "job")?).await),
         "stop_job" => to_json(crate::stop_job(app.state(), arg(&a, "serial")?).await),
+        "account_snapshots" => to_json(blocking(app, |x| crate::account_snapshots(x.state())).await?),
         "list_accounts" => {
             let serial: Option<String> = arg(&a, "serial")?;
             to_json(blocking(app, move |x| crate::list_accounts(x.state(), serial)).await?)

@@ -8,7 +8,6 @@ export const feature: Feature = {
   label: "Accounts",
   icon: ChartLine,
   group: "Analytics",
-  preview: true,
   page: lazy(() => import("./Page")),
   wide: true,
 };

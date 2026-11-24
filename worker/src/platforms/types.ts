@@ -18,6 +18,7 @@ export type Platform = {
   doubleTapLikes: boolean;
   /** Usernames logged in on this phone, current one first. */
   listAccounts(s: Browser): Promise<string[]>;
+  readAccountStats(s: Browser): Promise<{ username: string; followers: number; following: number; likes: number }>;
   /** Make `username` the active account. */
   switchAccount(s: Browser, username: string): Promise<void>;
 };

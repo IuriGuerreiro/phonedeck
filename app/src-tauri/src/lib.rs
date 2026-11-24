@@ -109,6 +109,13 @@ async fn run_job(
     let outcome = reply.as_ref().map(Value::to_string).map_err(|e| e.message.clone());
     db.finish_run(run_id, &outcome).map_err(err)?;
     record_accounts(&db, &serial, &job, &reply).map_err(err)?;
+    if action == "account_analytics" {
+        if let Ok(result) = &reply {
+            let count = |key: &str| result[key].as_i64().filter(|v| *v >= 0).ok_or_else(|| format!("Invalid account metric: {key}"));
+            db.save_account_snapshot(&serial, job["platform"].as_str().ok_or("Missing platform")?,
+                job["username"].as_str().ok_or("Missing username")?, count("followers")?, count("following")?, count("likes")?).map_err(err)?;
+        }
+    }
     reply.map_err(|e| e.message)
 }
 
@@ -128,6 +135,11 @@ fn list_accounts(db: State<'_, Db>, serial: Option<String>) -> CmdResult<Vec<Acc
 #[tauri::command(async)]
 fn delete_account(db: State<'_, Db>, id: i64) -> CmdResult<()> {
     db.delete_account(id).map_err(err)
+}
+
+#[tauri::command(async)]
+fn account_snapshots(db: State<'_, Db>) -> CmdResult<Vec<db::AccountSnapshot>> {
+    db.account_snapshots().map_err(err)
 }
 
 /// Warm-ups run for minutes; everything else should finish within a few.
@@ -211,6 +223,7 @@ pub fn run() {
             run_job,
             stop_job,
             list_accounts,
+            account_snapshots,
             delete_account,
             recent_runs,
             setup::setup_status,

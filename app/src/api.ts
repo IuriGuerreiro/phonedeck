@@ -27,9 +27,12 @@ export type JobRun = {
 /** Platforms with account automation. Only TikTok for now. */
 export type PlatformId = "tiktok";
 
+export type AccountSnapshot = { accountId: number; capturedAt: string; followers: number; following: number; likes: number };
+
 export type Job =
   | { action: "open_app"; package: string }
   | { action: "swipe_up" }
+  | { action: "account_analytics"; platform: PlatformId; username: string }
   | { action: "list_accounts"; platform: PlatformId }
   | { action: "switch_account"; platform: PlatformId; username: string }
   | {
@@ -95,6 +98,7 @@ export type WebInfo = {
 };
 
 export const api = {
+  accountSnapshots: () => invoke<AccountSnapshot[]>("account_snapshots"),
   listDevices: () => invoke<Device[]>("list_devices"),
   renameDevice: (serial: string, name: string) => invoke<void>("rename_device", { serial, name }),
   workerStatus: () => invoke<WorkerStatus>("worker_status"),
