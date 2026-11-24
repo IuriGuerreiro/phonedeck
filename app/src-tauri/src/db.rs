@@ -1,7 +1,7 @@
 //! SQLite storage. One file in the app data folder.
 use std::{path::Path, sync::Mutex};
 
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 use serde::Serialize;
 
 #[derive(Serialize, serde::Deserialize)]
@@ -78,6 +78,11 @@ const MIGRATIONS: &[&str] = &[r#"
         group_id INTEGER NOT NULL REFERENCES account_groups(id) ON DELETE CASCADE,
         account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
         PRIMARY KEY(group_id, account_id)
+    );
+"#, r#"
+    CREATE TABLE settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
     );
 "#];
 
@@ -202,6 +207,67 @@ impl Db {
             }
         }
         if !keywords.is_empty() { job.insert("keywords".into(), serde_json::json!(keywords)); }
+        Ok(())
+    }
+
+    /// Safety limits; defaults until saved.
+    pub fn safety(&self) -> Result<crate::safety::Safety, String> {
+        let v: Option<String> = self
+            .conn()
+            .query_row("SELECT value FROM settings WHERE key = 'safety'", [], |r| r.get(0))
+            .optional()
+            .map_err(|e| e.to_string())?;
+        Ok(v.and_then(|v| serde_json::from_str(&v).ok()).unwrap_or_default())
+    }
+
+    pub fn set_safety(&self, s: &crate::safety::Safety) -> Result<(), String> {
+        let json = serde_json::to_string(s).map_err(|e| e.to_string())?;
+        self.conn()
+            .execute(
+                "INSERT INTO settings (key, value) VALUES ('safety', ?1)
+                 ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+                [json],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
+    /// "HH:MM" in this PC's time zone.
+    pub fn local_time(&self) -> Result<String, String> {
+        self.conn()
+            .query_row("SELECT strftime('%H:%M', 'now', 'localtime')", [], |r| r.get(0))
+            .map_err(|e| e.to_string())
+    }
+
+    /// Likes, follows and minutes from this account's finished warm-ups today (local day).
+    pub fn usage_today(&self, serial: &str, username: &str) -> Result<crate::safety::Usage, String> {
+        self.conn()
+            .query_row(
+                "SELECT COALESCE(SUM(json_extract(result, '$.likes')), 0),
+                        COALESCE(SUM(json_extract(result, '$.follows')), 0),
+                        COALESCE(SUM((julianday(finished_at) - julianday(started_at)) * 1440), 0)
+                 FROM job_runs
+                 WHERE serial = ?1 AND action = 'warmup' AND finished_at IS NOT NULL
+                   AND json_extract(payload, '$.username') = ?2
+                   AND date(started_at, 'localtime') = date('now', 'localtime')",
+                params![serial, username],
+                |r| {
+                    Ok(crate::safety::Usage {
+                        likes: r.get::<_, i64>(0)?.max(0) as u32,
+                        follows: r.get::<_, i64>(1)?.max(0) as u32,
+                        minutes: r.get::<_, f64>(2)?.max(0.0).round() as u32,
+                    })
+                },
+            )
+            .map_err(|e| e.to_string())
+    }
+
+    #[cfg(test)]
+    pub fn backdate_run_start(&self, id: i64, minutes: i64) -> rusqlite::Result<()> {
+        self.conn().execute(
+            "UPDATE job_runs SET started_at = datetime(finished_at, ?2) WHERE id = ?1",
+            params![id, format!("-{minutes} minutes")],
+        )?;
         Ok(())
     }
 

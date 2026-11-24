@@ -263,6 +263,15 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
         "phone_info" => to_json(setup::phone::phone_info(arg(&a, "serial")?).await),
         "install_helper_apks" => to_json(setup::phone::install_helper_apks(arg(&a, "serial")?).await),
         "web_info" => to_json(Ok(web_info(app.state()))),
+        "get_safety" => to_json(blocking(app, |x| crate::get_safety(x.state())).await?),
+        "set_safety" => {
+            let safety: crate::safety::Safety = arg(&a, "safety")?;
+            to_json(blocking(app, move |x| crate::set_safety(x.state(), safety)).await?)
+        }
+        "usage_today" => {
+            let (serial, username): (String, String) = (arg(&a, "serial")?, arg(&a, "username")?);
+            to_json(blocking(app, move |x| crate::usage_today(x.state(), serial, username)).await?)
+        }
         other => Err(format!("Unknown command: {other}")),
     }
 }

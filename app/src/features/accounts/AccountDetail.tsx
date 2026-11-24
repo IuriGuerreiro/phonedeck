@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { accountsApi, type Account } from "@/data/accounts";
 import { deviceLabel, devicesApi, isReady, type Device } from "@/data/devices";
-import { api } from "@/api";
+import { api, type Usage } from "@/api";
+import { useSafety } from "@/settings/safety/store";
 import { useGroups } from "@/data/groups";
 import { useSettings } from "@/settings/SettingsContext";
 import { timeAgo } from "@/lib/time";
@@ -140,6 +141,7 @@ export function AccountDetail({ id }: { id: number }) {
             <p className="text-sm text-muted-foreground">
               Last warm-up: {account.lastWarmupAt ? timeAgo(account.lastWarmupAt) : "never"}
             </p>
+            <TodayUsage serial={account.serial} username={account.username} refresh={job.running?.label ?? ""} />
             <div className="flex flex-wrap gap-2">
               <Button
                 disabled={!canAct || savingGroup}
@@ -173,5 +175,32 @@ export function AccountDetail({ id }: { id: number }) {
         </Card>
       </div>
     </div>
+  );
+}
+
+/** "Today: 12/45 min · 8/60 likes · 1/10 follows", against Settings → Safety. */
+function TodayUsage({ serial, username, refresh }: { serial: string; username: string; refresh: string }) {
+  const limits = useSafety();
+  const { openSettings } = useSettings();
+  const [used, setUsed] = useState<Usage | null>(null);
+
+  useEffect(() => {
+    api.usageToday(serial, username).then(setUsed, () => setUsed(null));
+  }, [serial, username, refresh]);
+
+  if (!used) return null;
+  const part = (n: number, max: number, unit: string) => (
+    <span className={n >= max ? "font-medium text-destructive" : undefined}>
+      {n}/{max} {unit}
+    </span>
+  );
+  return (
+    <p className="text-sm text-muted-foreground">
+      Today: {part(used.minutes, limits.maxMinutesPerDay, "min")} · {part(used.likes, limits.maxLikesPerDay, "likes")} ·{" "}
+      {part(used.follows, limits.maxFollowsPerDay, "follows")}{" "}
+      <button className="underline underline-offset-4" onClick={() => openSettings("safety")}>
+        limits
+      </button>
+    </p>
   );
 }

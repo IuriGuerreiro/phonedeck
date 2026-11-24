@@ -1,22 +1,11 @@
-// Safety limits shared by the settings modal and the dashboard. Saved in localStorage.
+// Safety limits, saved by the app (SQLite) and enforced on every warm-up.
+// This store mirrors them for the UI: edits show at once and are saved shortly after.
 import { useSyncExternalStore } from "react";
+import { toast } from "sonner";
 
-export type SafetyLimits = {
-  maxLikesPerDay: number;
-  maxFollowsPerDay: number;
-  maxMinutesPerDay: number;
-  quietHoursOn: boolean;
-  /** "HH:MM", local time. */
-  quietStart: string;
-  quietEnd: string;
-  breaksOn: boolean;
-  /** Take a break after a random time in this range (minutes of activity). */
-  breakEveryMin: number;
-  breakEveryMax: number;
-  /** Break length range (minutes). */
-  breakLengthMin: number;
-  breakLengthMax: number;
-};
+import { api, type SafetyLimits } from "@/api";
+
+export type { SafetyLimits };
 
 export const SAFETY_DEFAULTS: SafetyLimits = {
   maxLikesPerDay: 60,
@@ -32,30 +21,47 @@ export const SAFETY_DEFAULTS: SafetyLimits = {
   breakLengthMax: 6,
 };
 
-const KEY = "phonedeck.safety";
 const listeners = new Set<() => void>();
-let limits: SafetyLimits = (() => {
-  try {
-    const s = localStorage.getItem(KEY);
-    return s ? { ...SAFETY_DEFAULTS, ...JSON.parse(s) } : SAFETY_DEFAULTS;
-  } catch {
-    return SAFETY_DEFAULTS;
-  }
-})();
+let limits: SafetyLimits = SAFETY_DEFAULTS;
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+const emit = () => listeners.forEach((l) => l());
+
+function load() {
+  api.getSafety().then(
+    (s) => {
+      limits = s;
+      emit();
+    },
+    () => {},
+  );
+}
+load();
 
 export function setSafety(next: SafetyLimits) {
   limits = next;
-  try {
-    localStorage.setItem(KEY, JSON.stringify(limits));
-  } catch {
-    // Not saved; still works for this session.
-  }
-  listeners.forEach((l) => l());
+  emit();
+  // Typing in a number field fires per key; save once it settles.
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    api.setSafety(limits).then(
+      (saved) => {
+        limits = saved;
+        emit();
+      },
+      (e) => toast.error(`Couldn't save safety limits: ${e}`),
+    );
+  }, 400);
 }
 
 export function useSafety() {
   return useSyncExternalStore(
-    (l) => (listeners.add(l), () => listeners.delete(l)),
+    (l) => {
+      listeners.add(l);
+      // Pick up changes made elsewhere (another browser, the desktop window).
+      if (listeners.size === 1) load();
+      return () => listeners.delete(l);
+    },
     () => limits,
   );
 }

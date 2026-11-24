@@ -54,7 +54,6 @@ export const settingsSections: SettingsSectionDef[] = [
     icon: ShieldCheck,
     group: "Automation",
     component: SafetySection,
-    preview: true,
     restoreDefaults: () => setSafety(SAFETY_DEFAULTS),
   },
   {

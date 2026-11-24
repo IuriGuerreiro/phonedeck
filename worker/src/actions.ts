@@ -21,9 +21,15 @@ export type WarmupOptions = {
    * instead of the main feed, moving to the next keyword every few videos.
    */
   keywords?: string[];
+  /** Likes / follows still allowed today (set by the app's safety limits). */
+  maxLikes?: number;
+  maxFollows?: number;
+  /** Random breaks: after every [everyMin, everyMax] minutes, pause [lengthMin, lengthMax] minutes. */
+  breaks?: { everyMin: number; everyMax: number; lengthMin: number; lengthMax: number };
 };
 
 const KEYCODE_HOME = 3;
+const KEYCODE_WAKEUP = 224;
 
 /** Videos to watch per keyword before searching the next one. */
 const VIDEOS_PER_KEYWORD: [number, number] = [6, 12];
@@ -108,10 +114,15 @@ async function warmup(s: Browser, serial: string, p: Platform, opts: WarmupOptio
   const likeChance = p.doubleTapLikes ? clamp(opts.likeChance, 0, 1) : 0;
   const followChance = clamp(opts.followChance ?? 0, 0, 1);
   const keywords = (opts.keywords ?? []).map((k) => k.trim()).filter(Boolean);
+  const maxLikes = Math.max(0, opts.maxLikes ?? Infinity);
+  const maxFollows = Math.max(0, opts.maxFollows ?? Infinity);
+  const breaks = opts.breaks;
+  const nextBreakIn = () => (breaks ? randInt(breaks.everyMin * 60_000, breaks.everyMax * 60_000) : Infinity);
+  let nextBreak = Date.now() + nextBreakIn();
 
   const end = Date.now() + minutes * 60_000;
   const { width, height } = await s.getWindowSize();
-  const stats = { videos: 0, likes: 0, follows: 0, searches: 0 };
+  const stats = { videos: 0, likes: 0, follows: 0, searches: 0, breaks: 0 };
 
   // Keywords are shuffled once, then used in turn.
   const queue = [...keywords].sort(() => Math.random() - 0.5);
@@ -144,12 +155,12 @@ async function warmup(s: Browser, serial: string, p: Platform, opts: WarmupOptio
     await sleepUnlessStopped(serial, Math.min(randInt(watchMin * 1000, watchMax * 1000), end - Date.now()));
     if (shouldStop(serial) || Date.now() >= end) break;
 
-    if (Math.random() < likeChance) {
+    if (stats.likes < maxLikes && Math.random() < likeChance) {
       await doubleTap(s, width * (0.4 + Math.random() * 0.2), height * (0.4 + Math.random() * 0.15));
       stats.likes++;
       await sleep(randInt(500, 1200));
     }
-    if (Math.random() < followChance && (await p.follow(s))) {
+    if (stats.follows < maxFollows && Math.random() < followChance && (await p.follow(s))) {
       stats.follows++;
       await sleep(randInt(500, 1200));
     }
@@ -162,6 +173,17 @@ async function warmup(s: Browser, serial: string, p: Platform, opts: WarmupOptio
       serial,
       `Warm-up${where}: ${stats.videos} videos, ${stats.likes} likes, ${stats.follows} follows, ~${left} min left`,
     );
+
+    // Random break: sit still like a person putting the phone down. Counts toward the session.
+    if (breaks && Date.now() >= nextBreak && end - Date.now() > 60_000) {
+      const ms = Math.min(randInt(breaks.lengthMin * 60_000, breaks.lengthMax * 60_000), end - Date.now() - 30_000);
+      progress(serial, `Taking a break for ~${Math.max(1, Math.round(ms / 60_000))} min…`);
+      await sleepUnlessStopped(serial, ms);
+      // The screen may have timed out meanwhile; wake it (doesn't unlock a PIN).
+      await s.execute("mobile: pressKey", { keycode: KEYCODE_WAKEUP }).catch(() => {});
+      stats.breaks++;
+      nextBreak = Date.now() + nextBreakIn();
+    }
   }
 
   // Done (or stopped): close the app and leave the phone on its home screen.

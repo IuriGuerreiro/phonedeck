@@ -99,6 +99,25 @@ export type WebInfo = {
   error: string | null;
 };
 
+/** Settings → Safety. Enforced by the app on every warm-up. */
+export type SafetyLimits = {
+  maxLikesPerDay: number;
+  maxFollowsPerDay: number;
+  maxMinutesPerDay: number;
+  quietHoursOn: boolean;
+  /** "HH:MM", local time of the PC running PhoneDeck. */
+  quietStart: string;
+  quietEnd: string;
+  breaksOn: boolean;
+  breakEveryMin: number;
+  breakEveryMax: number;
+  breakLengthMin: number;
+  breakLengthMax: number;
+};
+
+/** One account's warm-up use today. */
+export type Usage = { likes: number; follows: number; minutes: number };
+
 export const api = {
   listGroups: () => invoke<Group[]>("list_groups"),
   saveGroup: (group: { id: number | null; name: string; keywords: string[] }) => invoke<void>("save_group", group),
@@ -120,6 +139,9 @@ export const api = {
   /** PNG bytes of the phone's screen. Empty when the screen is off. */
   screenshot: (serial: string) => invoke<ArrayBuffer>("screenshot", { serial }),
   wakeScreen: (serial: string) => invoke<void>("wake_screen", { serial }),
+  getSafety: () => invoke<SafetyLimits>("get_safety"),
+  setSafety: (safety: SafetyLimits) => invoke<SafetyLimits>("set_safety", { safety }),
+  usageToday: (serial: string, username: string) => invoke<Usage>("usage_today", { serial, username }),
   webInfo: () => invoke<WebInfo>("web_info"),
   liveJobs: () => invoke<LiveJob[]>("live_jobs"),
   recentRuns: (limit = 50) => invoke<JobRun[]>("recent_runs", { limit }),

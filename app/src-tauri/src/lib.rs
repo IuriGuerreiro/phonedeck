@@ -2,6 +2,7 @@ mod adb;
 mod db;
 mod live;
 mod mirror;
+mod safety;
 mod setup;
 mod stats;
 mod viewer;
@@ -100,6 +101,7 @@ async fn run_job(
     };
     let action = job.get("action").and_then(Value::as_str).ok_or("job.action is required")?.to_string();
     db.apply_group_keywords(&serial, &mut job)?;
+    safety::apply(&db, &serial, &mut job)?;
     job.insert("serial".into(), Value::String(serial.clone()));
     let job = Value::Object(job);
 
@@ -125,6 +127,25 @@ async fn run_job(
 async fn stop_job(worker: State<'_, Worker>, serial: String) -> CmdResult<()> {
     let job = serde_json::json!({ "action": "stop", "serial": serial });
     worker.run(job, Duration::from_secs(10)).await.map(|_| ()).map_err(|e| e.message)
+}
+
+#[tauri::command(async)]
+fn get_safety(db: State<'_, Db>) -> CmdResult<safety::Safety> {
+    db.safety()
+}
+
+/// Saves the limits (cleaned up) and returns what was saved.
+#[tauri::command(async)]
+fn set_safety(db: State<'_, Db>, safety: safety::Safety) -> CmdResult<safety::Safety> {
+    let s = safety.cleaned();
+    db.set_safety(&s)?;
+    Ok(s)
+}
+
+/// Today's warm-up use for one account, for showing "12 / 45 min".
+#[tauri::command(async)]
+fn usage_today(db: State<'_, Db>, serial: String, username: String) -> CmdResult<safety::Usage> {
+    db.usage_today(&serial, &username)
 }
 
 #[tauri::command(async)]
@@ -240,6 +261,9 @@ pub fn run() {
             run_job,
             stop_job,
             list_groups,
+            get_safety,
+            set_safety,
+            usage_today,
             save_group,
             delete_group,
             set_group_member,

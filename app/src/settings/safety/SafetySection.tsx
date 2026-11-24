@@ -20,6 +20,10 @@ export function SafetySection() {
 
   return (
     <div className="flex flex-col gap-8">
+      <p className="text-sm text-muted-foreground">
+        Applied to every warm-up, manual or from “Warm up all”. Likes, follows and minutes count per account
+        per day. A warm-up stops liking or following once the day's limit is reached.
+      </p>
       <SettingSection title="Daily limits (per account)">
         <SettingRow label="Max likes">
           {num("maxLikesPerDay", 0, 1000)}
@@ -33,7 +37,7 @@ export function SafetySection() {
       </SettingSection>
 
       <SettingSection title="Quiet hours">
-        <SettingRow label="Pause overnight" description="Stop scheduling between these hours">
+        <SettingRow label="Pause overnight" description="No warm-ups start between these hours">
           <div className="flex justify-end">
             <Switch label="Quiet hours" checked={l.quietHoursOn} onChange={(v) => set("quietHoursOn", v)} />
           </div>
@@ -50,7 +54,7 @@ export function SafetySection() {
       </SettingSection>
 
       <SettingSection title="Breaks">
-        <SettingRow label="Random breaks" description="Pause periodically during sessions">
+        <SettingRow label="Random breaks" description="Sit idle now and then during a warm-up (counts toward its time)">
           <div className="flex justify-end">
             <Switch label="Random breaks" checked={l.breaksOn} onChange={(v) => set("breaksOn", v)} />
           </div>
