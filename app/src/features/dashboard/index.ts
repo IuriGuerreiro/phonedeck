@@ -8,6 +8,5 @@ export const feature: Feature = {
   label: "Dashboard",
   icon: LayoutDashboard,
   group: "Overview",
-  preview: true,
   page: lazy(() => import("./Page")),
 };

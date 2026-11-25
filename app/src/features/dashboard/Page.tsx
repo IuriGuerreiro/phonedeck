@@ -3,53 +3,78 @@ import { useEffect, useState } from "react";
 import { Bell, CalendarClock, CheckCheck, Flame, Moon, ShieldCheck, Smartphone } from "lucide-react";
 
 import { BarChart } from "@/components/shared/charts";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { timeAgo } from "@/lib/mock";
+import { parseTime, timeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { useAlerts } from "@/data/alerts";
-import { devicesApi, type Device } from "@/mocks/devices";
+import { api } from "@/api";
+import { accountsApi, type Account } from "@/data/accounts";
+import { devicesApi, isReady, type Device } from "@/data/devices";
 import { useSettings } from "@/settings/SettingsContext";
 import { inQuietHours, useSafety } from "@/settings/safety/store";
 import { ALERT_KIND, alertTitle } from "../alerts/kinds";
 import { accountHealth } from "../accounts/health";
 import { HealthBadge } from "../accounts/HealthBadge";
-import { accountsApi, type Account, type DayStat } from "@/mocks/accounts";
-import { untilText, upcomingRuns } from "./mock";
+import { untilText, type PlannedRun } from "./runs";
 
-const isToday = (iso: string) => new Date(iso).toDateString() === new Date().toDateString();
+const isToday = (time: string) => parseTime(time).toDateString() === new Date().toDateString();
+
+/** Not wired yet: needs warm-up minutes per day from the backend. */
+const SAMPLE_WEEK = [32, 41, 0, 28, 45, 37, 22].map((value, i) => ({
+  label: new Date(Date.now() - (6 - i) * 86_400_000).toLocaleDateString([], { weekday: "short" }),
+  value,
+}));
 
 export default function DashboardPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [week, setWeek] = useState<{ label: string; value: number }[]>([]);
+  const [planned, setPlanned] = useState<PlannedRun[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const { alerts } = useAlerts();
   const safety = useSafety();
   const { openSettings } = useSettings();
 
   useEffect(() => {
-    devicesApi.list().then(setDevices);
-    accountsApi.list().then(async (list) => {
-      setAccounts(list);
-      // Total warm-up minutes per day over the last 7 days, all accounts.
-      const all: DayStat[][] = await Promise.all(list.map((a) => accountsApi.history(a.id, 7)));
-      setWeek(
-        (all[0] ?? []).map((d, i) => ({
-          label: new Date(d.date).toLocaleDateString([], { weekday: "short" }),
-          value: all.reduce((s, h) => s + (h[i]?.warmupMinutes ?? 0), 0),
-        })),
+    let alive = true;
+    const load = () => {
+      Promise.all([devicesApi.list(), accountsApi.list(), api.listSchedules(), api.listGroups(), api.upcomingRuns(8)]).then(
+        ([d, a, schedules, groups, runs]) => {
+          if (!alive) return;
+          const members = (groupId: number | null) =>
+            groupId === null ? a.length : a.filter((x) => groups.find((g) => g.id === groupId)?.accountIds.includes(x.id)).length;
+          setDevices(d);
+          setAccounts(a);
+          setPlanned(
+            runs.map((r) => ({
+              key: `${r.scheduleId}-${r.date}-${r.at}`,
+              label: r.name,
+              at: new Date(`${r.date}T${r.at}:00`),
+              accounts: members(schedules.find((s) => s.id === r.scheduleId)?.groupId ?? null),
+            })),
+          );
+          setNow(new Date());
+          setError(null);
+        },
+        (e) => alive && setError(String(e)),
       );
-    });
-    const t = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(t);
+    };
+    load();
+    const t = setInterval(load, 5000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
   }, []);
 
-  const online = devices.filter((d) => d.state === "device").length;
+  const online = devices.filter(isReady).length;
   const warmedToday = accounts.filter((a) => a.lastWarmupAt && isToday(a.lastWarmupAt)).length;
   const openAlerts = alerts.filter((a) => !a.resolvedAt);
   const errorsToday = alerts.filter((a) => isToday(a.createdAt)).length;
-  const runs = upcomingRuns(3, now);
+  // The backend keeps a slot listed for a while after it started.
+  const runs = planned.filter((r) => r.at > now).slice(0, 3);
   const next = runs[0];
   const quiet = inQuietHours(safety, now);
   const needCare = accounts
@@ -66,8 +91,10 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {error && <p role="alert" className="text-sm text-destructive">Couldn't load: {error}</p>}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile icon={Smartphone} label="Devices online" value={`${online} / ${devices.length}`} href="#control-room" />
+        <Tile icon={Smartphone} label="Devices online" value={`${online} / ${devices.length}`} href="#devices" />
         <Tile icon={Flame} label="Warmed today" value={`${warmedToday} / ${accounts.length}`} href="#accounts" />
         <Tile
           icon={Bell}
@@ -82,17 +109,20 @@ export default function DashboardPage() {
           label="Next run"
           value={next ? next.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
           sub={next ? untilText(next.at, now) : undefined}
+          href="#schedule"
         />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle>Warm-up activity</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              Warm-up activity <Badge variant="outline">Sample data</Badge>
+            </CardTitle>
             <CardDescription>Last 7 days</CardDescription>
           </CardHeader>
           <CardContent>
-            {week.length ? <BarChart unit="min" data={week} /> : <p className="text-sm text-muted-foreground">Loading…</p>}
+            <BarChart unit="min" data={SAMPLE_WEEK} />
           </CardContent>
         </Card>
 
@@ -101,13 +131,14 @@ export default function DashboardPage() {
             <CardTitle>Upcoming</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
+            {runs.length === 0 && <p className="text-sm text-muted-foreground">Nothing planned this week.</p>}
             {runs.map((r) => (
-              <div key={r.at.toISOString()} className="flex items-start justify-between gap-3 text-sm">
+              <div key={r.key} className="flex items-start justify-between gap-3 text-sm">
                 <div>
                   <div className="font-medium">{r.label}</div>
                   <div className="text-xs text-muted-foreground">
-                    {r.at.toLocaleDateString() === now.toLocaleDateString() ? "Today" : "Tomorrow"}{" "}
-                    {r.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {r.accounts} accounts
+                    {dayText(r.at, now)}{" "}
+                    {r.at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · {r.accounts} account{r.accounts === 1 ? "" : "s"}
                   </div>
                 </div>
                 <span className="text-xs whitespace-nowrap text-muted-foreground">{untilText(r.at, now)}</span>
@@ -191,6 +222,14 @@ export default function DashboardPage() {
       </div>
     </div>
   );
+}
+
+function dayText(at: Date, now: Date) {
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (at.toDateString() === now.toDateString()) return "Today";
+  if (at.toDateString() === tomorrow.toDateString()) return "Tomorrow";
+  return at.toLocaleDateString([], { weekday: "short", day: "numeric" });
 }
 
 function Tile(props: {
