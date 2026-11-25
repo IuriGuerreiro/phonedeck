@@ -11,6 +11,7 @@ import { accountsApi, type Account } from "@/data/accounts";
 import { deviceLabel, devicesApi, deviceState, isReady, type Device } from "@/data/devices";
 import { DeviceDetail } from "./DeviceDetail";
 import { ViewScreenButton } from "./ViewScreenButton";
+import { BatteryLife } from "@/components/shared/BatteryLife";
 import { BatteryLevel } from "@/components/shared/BatteryLevel";
 import { liveJobText, useDeviceStats, useLiveJobs, type LiveJob } from "@/data/live";
 
@@ -151,8 +152,17 @@ function DeviceCard({
           {stats?.battery != null && (
             <>
               <dt className="text-muted-foreground">Battery</dt>
-              <dd>
+              <dd className="flex items-center gap-2">
                 <BatteryLevel level={stats.battery} charging={stats.charging} />
+                {stats.batteryTemp != null && <span className="text-muted-foreground">{stats.batteryTemp.toFixed(1)} °C</span>}
+              </dd>
+            </>
+          )}
+          {stats && (stats.batteryHealth || stats.batteryCapacityMah != null) && (
+            <>
+              <dt className="text-muted-foreground">Battery life</dt>
+              <dd>
+                <BatteryLife stats={stats} model={d.model} />
               </dd>
             </>
           )}

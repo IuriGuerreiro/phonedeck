@@ -89,6 +89,9 @@ export type DeviceStats = {
   charging: boolean;
   /** °C */
   batteryTemp: number | null;
+  batteryHealth: "good" | "overheating" | "dead" | "over_voltage" | "failing" | "cold" | null;
+  /** What a full charge holds now. Not exact. */
+  batteryCapacityMah: number | null;
   storageUsedBytes: number | null;
   storageTotalBytes: number | null;
   ramTotalBytes: number | null;
