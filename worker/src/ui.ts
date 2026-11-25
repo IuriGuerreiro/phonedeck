@@ -64,10 +64,11 @@ export async function swipeUp(s: Browser, durationMs = 300) {
   const x = Math.round(width * (0.45 + Math.random() * 0.1));
   await s
     .action("pointer", { parameters: { pointerType: "touch" } })
-    .move({ x, y: Math.round(height * 0.75) })
+    // Start above the photo dots (~0.75 of the height): they swallow swipes that begin on them.
+    .move({ x, y: Math.round(height * (0.62 + Math.random() * 0.06)) })
     .down()
     .pause(50)
-    .move({ x, y: Math.round(height * 0.25), duration: durationMs })
+    .move({ x, y: Math.round(height * (0.16 + Math.random() * 0.06)), duration: durationMs })
     .up()
     .perform();
 }

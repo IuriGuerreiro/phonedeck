@@ -6,8 +6,8 @@
 import { createInterface } from "node:readline";
 import os from "node:os";
 import path from "node:path";
-import { startAppium } from "./appium.ts";
-import { closeAll, setAppiumPort } from "./devices.ts";
+import { isUp, startAppium } from "./appium.ts";
+import { closeAll, setAppiumPort, setAppiumReviver } from "./devices.ts";
 import { runJob, type Job } from "./actions.ts";
 import { send } from "./protocol.ts";
 
@@ -22,6 +22,12 @@ try {
   process.exit(1);
 }
 setAppiumPort(appium.port);
+setAppiumReviver(async () => {
+  if (await isUp(port)) return;
+  console.error("[worker] Appium is down; starting it again");
+  appium.stop();
+  appium = await startAppium(port, logDir);
+});
 send({ event: "ready", appiumPort: appium.port });
 
 const rl = createInterface({ input: process.stdin });

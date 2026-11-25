@@ -19,6 +19,13 @@ export function setAppiumPort(port: number) {
   appiumPort = port;
 }
 
+/** Makes sure Appium is running; set by the worker entry. Unplugging a phone can crash Appium. */
+let reviveAppium: (() => Promise<void>) | undefined;
+let reviving: Promise<void> | undefined;
+export function setAppiumReviver(fn: () => Promise<void>) {
+  reviveAppium = fn;
+}
+
 /** Phones where the user asked the running job to stop. Long jobs check this. */
 const stopRequested = new Set<string>();
 export const requestStop = (serial: string) => stopRequested.add(serial);
@@ -53,6 +60,9 @@ export function withDevice<T>(serial: string, fn: (s: Browser) => Promise<T>): P
 
 async function ensureSession(d: Device): Promise<Browser> {
   if (d.session && (await isAlive(d.session))) return d.session;
+  // One check at a time, so two phones don't start two servers.
+  reviving ??= reviveAppium?.().finally(() => (reviving = undefined));
+  await reviving;
   d.session = await remote({
     hostname: "127.0.0.1",
     port: appiumPort,
