@@ -50,6 +50,9 @@ const ACTION_TEXT: Record<string, string> = {
   list_accounts: "Syncing accounts",
   switch_account: "Switching account",
   warmup: "Warming up",
+  prepare_post: "Preparing a post",
+  publish_post: "Publishing",
+  post_video: "Posting",
 };
 
 /** "Warming up @ana", "Syncing accounts", or "Idle". */

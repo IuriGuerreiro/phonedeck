@@ -24,6 +24,11 @@ const SEARCH_SUBMIT = [byText(labelRe("Search", "Pesquisar", "Buscar"))];
 
 async function ensureForeground(s: Browser) {
   await s.activateApp(PKG);
+  // A Facebook sign-in page opened from TikTok stays on top of it, even after a restart.
+  await sleep(500);
+  if ((await s.getCurrentPackage()) === "com.facebook.katana") {
+    await s.execute("mobile: startActivity", { intent: `${PKG}/com.ss.android.ugc.aweme.splash.SplashActivity`, action: "android.intent.action.MAIN", flags: "0x10008000", stop: true });
+  }
   // A cold start can take several seconds.
   const deadline = Date.now() + 12_000;
   while ((await s.getCurrentPackage()) !== PKG && Date.now() < deadline) await sleep(500);

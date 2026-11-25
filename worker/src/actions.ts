@@ -1,5 +1,5 @@
 // Phone actions. Each takes the job payload and returns a small result.
-import { prepareTikTokPost, publishTikTokPost, type PostContent } from "./platforms/tiktok-posting.ts";
+import { prepareTikTokPost, publishTikTokPost, remoteVideo, type PostContent } from "./platforms/tiktok-posting.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -49,7 +49,8 @@ const preparedPosts = new Map<string, PostContent>();
 
 export type Job =
   | ({ action: "prepare_post"; serial: string; platform: string; username: string } & PostContent)
-  | { action: "publish_post"; serial: string; postId: number }
+  | { action: "publish_post"; serial: string; platform: string; username: string; postId: number }
+  | ({ action: "post_video"; serial: string; platform: string; username: string } & PostContent)
   | { action: "open_app"; serial: string; package: string }
   | { action: "swipe_up"; serial: string }
   | { action: "list_accounts"; serial: string; platform: string }
@@ -65,18 +66,26 @@ export function runJob(job: Job): Promise<unknown> {
       return withJobDevice(job, (s) => guard(s, job, async () => {
         await switchTo(s, job.serial, platform(job.platform), job.username);
         progress(job.serial, "Preparing video on TikTok…");
-        const result = await prepareTikTokPost(s, job);
+        const result = await prepareTikTokPost(s, job.serial, job);
         preparedPosts.set(job.serial, job);
         return result;
       }));
     case "publish_post":
-      return withJobDevice(job, (s) => guard(s, job, async () => {
+      return posting(job, async (s, onPress) => {
         const prepared = preparedPosts.get(job.serial);
         preparedPosts.delete(job.serial);
         if (!prepared || prepared.postId !== job.postId) throw new Error("This draft is no longer prepared on the phone. Prepare it again.");
         progress(job.serial, "Publishing video…");
-        return publishTikTokPost(s, prepared);
-      }));
+        return publishTikTokPost(s, job.username, prepared, onPress, (n) => progress(job.serial, n));
+      });
+    case "post_video":
+      return posting(job, async (s, onPress) => {
+        await switchTo(s, job.serial, platform(job.platform), job.username);
+        progress(job.serial, "Preparing video on TikTok…");
+        await prepareTikTokPost(s, job.serial, job);
+        progress(job.serial, "Publishing video…");
+        return publishTikTokPost(s, job.username, job, onPress, (n) => progress(job.serial, n));
+      });
     case "open_app":
       return withJobDevice(job, async (s) => {
         await s.activateApp(job.package);
@@ -131,6 +140,23 @@ export function runJob(job: Job): Promise<unknown> {
       return Promise.resolve({ stopping: true });
     default:
       throw new Error(`Unknown action: ${(job as { action: string }).action}`);
+  }
+}
+
+/**
+ * Failures before Publish was pressed are marked "Not posted:", so the app knows a retry
+ * can't post twice. Anything later is uncertain.
+ */
+async function posting<T>(job: Extract<Job, { action: "publish_post" | "post_video" }>, fn: (s: Browser, onPress: () => void) => Promise<T>): Promise<T> {
+  let pressed = false;
+  try {
+    const result = await withJobDevice(job, (s) => guard(s, job, () => fn(s, () => void (pressed = true))));
+    // The copy on the phone is no longer needed.
+    await run("adb", ["-s", job.serial, "shell", "rm", "-f", remoteVideo(job.postId)], { timeout: 10_000 }).catch(() => {});
+    return result;
+  } catch (err) {
+    if (!pressed && err instanceof Error) err.message = `Not posted: ${err.message}`;
+    throw err;
   }
 }
 

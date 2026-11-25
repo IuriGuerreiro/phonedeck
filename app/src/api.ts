@@ -198,6 +198,7 @@ export const api = {
   finishPostUpload: (id: number) => invoke<void>("finish_post_upload", { id }),
   deletePost: (id: number) => invoke<void>("delete_post", { id }),
   preparePost: (id: number) => invoke<void>("prepare_post", { id }),
+  postNow: (id: number) => invoke<void>("post_now", { id }),
   publishPost: (id: number) => invoke<void>("publish_post", { id }),
   listGroups: () => invoke<Group[]>("list_groups"),
   saveGroup: (group: { id: number | null; name: string; keywords: string[] }) => invoke<void>("save_group", group),

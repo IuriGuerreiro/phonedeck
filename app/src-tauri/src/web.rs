@@ -239,6 +239,7 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
         }
         "prepare_post" => to_json(crate::posting::prepare_post(app.clone(), arg(&a, "id")?).await),
         "publish_post" => to_json(crate::posting::publish_post(app.clone(), arg(&a, "id")?).await),
+        "post_now" => to_json(crate::posting::post_now(app.clone(), arg(&a, "id")?).await),
         "video_readings" => to_json(blocking(app, |x| crate::video_analytics::video_readings(x.state())).await?),
         "account_snapshots" => to_json(blocking(app, |x| crate::account_snapshots(x.state())).await?),
         "list_groups" => to_json(blocking(app, |x| crate::list_groups(x.state())).await?),

@@ -247,7 +247,9 @@ fn account_snapshots(db: State<'_, Db>) -> CmdResult<Vec<db::AccountSnapshot>> {
 fn job_timeout(job: &Value) -> Duration {
     let base = 180;
     match job["action"].as_str() {
-        Some("prepare_post") | Some("publish_post") => Duration::from_secs(300),
+        Some("prepare_post") => Duration::from_secs(1200),
+        // Must outlast the worker's own wait for the largest video (confirmMs).
+        Some("publish_post") | Some("post_video") => Duration::from_secs(3600),
         Some("video_analytics") => Duration::from_secs(900),
         Some("warmup") => {
             let minutes = job["minutes"].as_f64().unwrap_or(10.0).clamp(1.0, 120.0);
@@ -358,6 +360,7 @@ pub fn run() {
             posting::delete_post,
             posting::prepare_post,
             posting::publish_post,
+            posting::post_now,
             delete_account,
             recent_runs,
             setup::setup_status,

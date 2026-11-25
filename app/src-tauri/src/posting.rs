@@ -1,10 +1,11 @@
-use std::{fs::{self, OpenOptions}, io::Write, path::PathBuf, sync::Mutex};
+use std::{fs::{self, OpenOptions}, io::{Read, Write}, path::PathBuf, sync::Mutex};
 use rusqlite::params;
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use crate::db::Db;
 
-const MAX_BYTES: i64 = 50 * 1024 * 1024;
+const MAX_BYTES: i64 = 500 * 1024 * 1024;
+const MAX_CHUNK: usize = 384 * 1024;
 pub struct Media { dir: PathBuf, writes: Mutex<()> }
 impl Media {
     pub fn new(dir: PathBuf) -> Result<Self, std::io::Error> {
@@ -64,7 +65,7 @@ pub fn create_post(db: State<'_, Db>, account_id: i64, name: String, caption: St
 }
 
 fn create_draft(db: &Db, account_id: i64, name: String, caption: String, visibility: String, bytes: i64) -> Result<i64, String> {
-    if bytes <= 0 || bytes > MAX_BYTES { return Err("Choose an MP4 video up to 50 MB".into()); }
+    if bytes <= 0 || bytes > MAX_BYTES { return Err("Choose an MP4 video up to 500 MB".into()); }
     if !name.to_lowercase().ends_with(".mp4") || name.len() > 255 { return Err("Choose an MP4 video".into()); }
     if caption.trim().is_empty() || caption.chars().count() > 2200 { return Err("Enter a caption up to 2200 characters".into()); }
     if visibility != "private" && visibility != "public" { return Err("Choose Only you or Everyone".into()); }
@@ -81,7 +82,7 @@ pub fn upload_post_chunk(db: State<'_, Db>, media: State<'_, Media>, id: i64, of
 }
 
 fn append_chunk(db: &Db, media: &Media, id: i64, offset: u64, data: Vec<u8>) -> Result<(), String> {
-    if data.is_empty() || data.len() > 128 * 1024 { return Err("Invalid video chunk".into()); }
+    if data.is_empty() || data.len() > MAX_CHUNK { return Err("Invalid video chunk".into()); }
     let _lock = media.writes.lock().map_err(|e| e.to_string())?;
     let post = db.post(id)?;
     if post.status != "uploading" { return Err("This video upload is closed".into()); }
@@ -101,8 +102,12 @@ fn finish_upload(db: &Db, media: &Media, id: i64) -> Result<(), String> {
     let _lock = media.writes.lock().map_err(|e| e.to_string())?;
     let post = db.post(id)?;
     if post.status != "uploading" { return Err("This video upload is closed".into()); }
-    let data = fs::read(media.path(id)).map_err(|e| e.to_string())?;
-    if data.len() as i64 != post.bytes || data.get(4..8) != Some(b"ftyp") { return Err("The upload is incomplete or is not an MP4 video".into()); }
+    // Only the first bytes: videos can be large.
+    let mut file = fs::File::open(media.path(id)).map_err(|e| e.to_string())?;
+    let length = file.metadata().map_err(|e| e.to_string())?.len();
+    let mut head = [0u8; 8];
+    let is_mp4 = file.read_exact(&mut head).is_ok() && &head[4..] == b"ftyp";
+    if length as i64 != post.bytes || !is_mp4 { return Err("The upload is incomplete or is not an MP4 video".into()); }
     db.post_status(id, "draft", None)
 }
 
@@ -129,23 +134,50 @@ pub async fn prepare_post(app: AppHandle, id: i64) -> Result<(), String> {
     }
 }
 
+/// Publishes the video already prepared on the phone.
 #[tauri::command]
 pub async fn publish_post(app: AppHandle, id: i64) -> Result<(), String> {
+    publish(app, id, &["ready"], "publish_post").await
+}
+
+/// Everything in one go: upload to the phone, publish, and check it's on the profile.
+#[tauri::command]
+pub async fn post_now(app: AppHandle, id: i64) -> Result<(), String> {
+    publish(app, id, &["draft", "failed", "ready"], "post_video").await
+}
+
+async fn publish(app: AppHandle, id: i64, from: &[&str], action: &str) -> Result<(), String> {
     let db = app.state::<Db>();
     let post = db.post(id)?;
     db.check_hold(&post.serial)?;
-    db.claim_post(id, &["ready"], "publishing")?;
-    let result = crate::execute_job(&app, post.serial, serde_json::json!({ "action": "publish_post", "postId": id })).await;
+    if !matches!(app.state::<crate::worker::Worker>().status(), crate::worker::WorkerStatus::Ready { .. }) {
+        return Err("Automation engine is not ready yet".into());
+    }
+    db.claim_post(id, from, "publishing")?;
+    let path = app.state::<Media>().path(id);
+    let result = crate::execute_job(&app, post.serial, serde_json::json!({ "action": action, "platform": "tiktok", "username": post.username, "postId": id, "filePath": path, "caption": post.caption, "visibility": post.visibility })).await;
     match result {
         Ok(_) => db.post_status(id, "submitted", None),
-        Err(e) => { db.post_status(id, "uncertain", Some(&e))?; Err(e) }
+        Err(e) => { db.post_status(id, failed_status(&e), Some(&e))?; Err(e) }
     }
+}
+
+/// Only failures known to come before Publish was pressed may be retried.
+fn failed_status(error: &str) -> &'static str {
+    if error.starts_with("Not posted: ") || error.starts_with(crate::alerts::HOLD) { "failed" } else { "uncertain" }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::db::AccountEvent;
+    #[test]
+    fn only_retries_failures_before_publish() {
+        assert_eq!(failed_status("Not posted: caption differs"), "failed");
+        assert_eq!(failed_status("Phone on hold: check it"), "failed");
+        assert_eq!(failed_status("Job timed out after 900s"), "uncertain");
+        assert_eq!(failed_status("Worker stopped"), "uncertain");
+    }
     fn account(db: &Db) -> i64 {
         db.upsert_account("phone", "tiktok", "one", AccountEvent::Seen).unwrap();
         db.accounts(None).unwrap()[0].id

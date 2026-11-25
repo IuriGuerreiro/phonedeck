@@ -202,6 +202,21 @@ impl Db {
         Ok((n == 1).then(|| conn.last_insert_rowid()))
     }
 
+    /// Claims a "Run now" slot; None while any run of this schedule is still going.
+    /// One statement, so a double click can't start two.
+    fn claim_now(&self, schedule_id: i64, slot: &str) -> Result<Option<i64>, String> {
+        let conn = self.conn();
+        let n = conn
+            .execute(
+                "INSERT OR IGNORE INTO schedule_runs (schedule_id, slot, status)
+                 SELECT ?1, ?2, 'running' WHERE NOT EXISTS
+                   (SELECT 1 FROM schedule_runs WHERE schedule_id = ?1 AND status = 'running')",
+                params![schedule_id, slot],
+            )
+            .map_err(|e| e.to_string())?;
+        Ok((n == 1).then(|| conn.last_insert_rowid()))
+    }
+
     fn finish_schedule_run(&self, id: i64, status: &str, results: &Value) -> Result<(), String> {
         self.conn()
             .execute(
@@ -342,15 +357,56 @@ fn due_now(db: &Db) -> Result<Vec<(Schedule, String)>, String> {
 
 // ---------- running ----------
 
-/// Run ids the user asked to stop.
 #[derive(Default)]
-pub struct Scheduler {
-    cancelled: Mutex<HashSet<i64>>,
+struct Runs {
+    /// Run ids the user asked to stop.
+    cancelled: HashSet<i64>,
+    /// Phones running a scheduled warm-up right now, as (run id, serial).
+    active: HashSet<(i64, String)>,
+}
+
+#[derive(Default)]
+pub struct Scheduler(Mutex<Runs>);
+
+#[derive(Debug, PartialEq)]
+enum Begin {
+    Go,
+    Stopped,
+    Busy,
 }
 
 impl Scheduler {
+    fn runs(&self) -> std::sync::MutexGuard<'_, Runs> {
+        self.0.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn is_cancelled(&self, run: i64) -> bool {
-        self.cancelled.lock().unwrap_or_else(|e| e.into_inner()).contains(&run)
+        self.runs().cancelled.contains(&run)
+    }
+
+    /// Marks the phone as used by this run, unless the run was stopped or another run has it.
+    fn begin(&self, run: i64, serial: &str) -> Begin {
+        let mut r = self.runs();
+        if r.cancelled.contains(&run) {
+            Begin::Stopped
+        } else if r.active.iter().any(|(_, s)| s == serial) {
+            Begin::Busy
+        } else {
+            r.active.insert((run, serial.to_string()));
+            Begin::Go
+        }
+    }
+
+    fn end(&self, run: i64, serial: &str) {
+        self.runs().active.remove(&(run, serial.to_string()));
+    }
+
+    fn cancel(&self, run: i64) {
+        self.runs().cancelled.insert(run);
+    }
+
+    fn phones(&self, run: i64) -> Vec<String> {
+        self.runs().active.iter().filter(|(r, _)| *r == run).map(|(_, s)| s.clone()).collect()
     }
 }
 
@@ -394,16 +450,28 @@ pub fn run_now(app: &AppHandle, schedule_id: i64) -> Result<i64, String> {
         .find(|s| s.id == Some(schedule_id))
         .ok_or("That schedule no longer exists.")?;
     let slot = format!("now {}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
-    let run = db.claim_slot(schedule_id, &slot)?.ok_or("Already running.")?;
+    let run = db.claim_now(schedule_id, &slot)?.ok_or("This schedule is already running.")?;
     tauri::async_runtime::spawn(run_schedule(app.clone(), schedule, run));
     Ok(run)
 }
 
-/// Stops a run: no new accounts start, and the phones' current warm-ups are asked to stop.
+/// Stops a run: no new accounts start, and the warm-ups it is running are asked to stop.
+/// Other jobs on other phones are left alone.
 pub async fn stop(app: &AppHandle, run: i64) {
-    app.state::<Scheduler>().cancelled.lock().unwrap_or_else(|e| e.into_inner()).insert(run);
-    let busy: Vec<String> = app.state::<crate::live::Live>().all().into_iter().map(|j| j.serial).collect();
-    for serial in busy {
+    app.state::<Scheduler>().cancel(run);
+    stop_phones(app, run).await;
+    // A warm-up that was just starting clears the first request; ask again while it's still going.
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        for _ in 0..3 {
+            tokio::time::sleep(Duration::from_secs(3)).await;
+            stop_phones(&app, run).await;
+        }
+    });
+}
+
+async fn stop_phones(app: &AppHandle, run: i64) {
+    for serial in app.state::<Scheduler>().phones(run) {
         let _ = crate::stop_job(app.state(), serial).await;
     }
 }
@@ -484,20 +552,30 @@ async fn plan_and_run(app: &AppHandle, schedule: &Schedule, run: i64) -> Vec<Val
             tauri::async_runtime::spawn(async move {
                 let mut res = Vec::new();
                 for a in accounts {
-                    if app.state::<Scheduler>().is_cancelled(run) {
-                        res.push(result(&a.username, &serial, "skipped", "Stopped"));
+                    if app.state::<crate::live::Live>().all().iter().any(|j| j.serial == serial) {
+                        let note = if app.state::<Scheduler>().is_cancelled(run) { "Stopped" } else { "Phone busy with another job" };
+                        res.push(result(&a.username, &serial, "skipped", note));
                         continue;
                     }
-                    if app.state::<crate::live::Live>().all().iter().any(|j| j.serial == serial) {
-                        res.push(result(&a.username, &serial, "skipped", "Phone busy with another job"));
-                        continue;
+                    match app.state::<Scheduler>().begin(run, &serial) {
+                        Begin::Go => {}
+                        Begin::Stopped => {
+                            res.push(result(&a.username, &serial, "skipped", "Stopped"));
+                            continue;
+                        }
+                        Begin::Busy => {
+                            res.push(result(&a.username, &serial, "skipped", "Phone busy with another job"));
+                            continue;
+                        }
                     }
                     let mut job = options.clone();
                     job["action"] = json!("warmup");
                     job["platform"] = json!(a.platform);
                     job["username"] = json!(a.username);
                     job["minutes"] = json!(minutes);
-                    res.push(match crate::execute_job(&app, serial.clone(), job).await {
+                    let outcome = crate::execute_job(&app, serial.clone(), job).await;
+                    app.state::<Scheduler>().end(run, &serial);
+                    res.push(match outcome {
                         Ok(r) => {
                             let note = format!(
                                 "{} videos, {} likes, {} follows",
@@ -567,6 +645,34 @@ mod tests {
         // Never past the end of the day.
         let late = Schedule { jitter_min: 120, ..schedule() };
         assert!(due_minute(&late, 1, "2026-11-24", "23:50").unwrap() <= 23 * 60 + 59);
+    }
+
+    #[test]
+    fn stopping_a_run_only_touches_its_own_phones() {
+        let s = Scheduler::default();
+        assert_eq!(s.begin(1, "A"), Begin::Go);
+        assert_eq!(s.begin(2, "B"), Begin::Go);
+        assert_eq!(s.begin(2, "A"), Begin::Busy);
+        s.cancel(1);
+        assert_eq!(s.phones(1), vec!["A".to_string()]);
+        assert_eq!(s.phones(2), vec!["B".to_string()]);
+        s.end(1, "A");
+        assert!(s.phones(1).is_empty());
+        assert_eq!(s.begin(1, "A"), Begin::Stopped);
+        assert_eq!(s.begin(2, "A"), Begin::Go);
+    }
+
+    #[test]
+    fn run_now_starts_once() {
+        let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+        let run = db.claim_now(1, "now 1").unwrap().unwrap();
+        assert!(db.claim_now(1, "now 2").unwrap().is_none());
+        assert!(db.claim_now(2, "now 2").unwrap().is_some());
+        db.finish_schedule_run(run, "done", &json!([])).unwrap();
+        assert!(db.claim_now(1, "now 3").unwrap().is_some());
+        // A timed run counts too.
+        db.claim_slot(3, "2026-11-24 08:00").unwrap();
+        assert!(db.claim_now(3, "now 4").unwrap().is_none());
     }
 
     #[test]
