@@ -90,7 +90,7 @@ fn install_scrcpy(m: &Managed, tool: &str, emit: Emit, step: &dyn Fn(&str)) -> R
     }
     step("Finding the latest release…");
     let release: serde_json::Value = ureq::get(SCRCPY_LATEST)
-        .header("User-Agent", "phonedeck-setup")
+        .header("User-Agent", "tapfleet-setup")
         .header("Accept", "application/vnd.github+json")
         .call()
         .and_then(|mut r| r.body_mut().read_to_string())
@@ -132,7 +132,7 @@ fn install_appium(m: &Managed, tool: &str, emit: Emit, step: &dyn Fn(&str)) -> R
     fs::create_dir_all(&home).map_err(err)?;
     let pkg = home.join("package.json");
     if !pkg.exists() {
-        fs::write(&pkg, "{ \"name\": \"phonedeck-appium\", \"private\": true }\n").map_err(err)?;
+        fs::write(&pkg, "{ \"name\": \"tapfleet-appium\", \"private\": true }\n").map_err(err)?;
     }
     let node = node_bin();
     let npm = match node.parent().filter(|p| !p.as_os_str().is_empty()) {

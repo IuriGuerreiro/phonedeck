@@ -30,7 +30,9 @@ async function pushVideo(serial: string, file: string, remotePath: string) {
   }
 }
 
-export const remoteVideo = (postId: number) => `/sdcard/Download/phonedeck-${postId}.mp4`;
+export const remoteVideo = (postId: number) => `/sdcard/Download/tapfleet-${postId}.mp4`;
+/** Name used before the rename to Tapfleet; a post prepared then may still have its copy there. */
+export const oldRemoteVideo = (postId: number) => `/sdcard/Download/phonedeck-${postId}.mp4`;
 
 export async function prepareTikTokPost(s: Browser, serial: string, content: PostContent) {
   const remotePath = remoteVideo(content.postId);

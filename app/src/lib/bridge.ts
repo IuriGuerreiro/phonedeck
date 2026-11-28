@@ -2,11 +2,13 @@
 // Window: Tauri's IPC. Browser: the app's web server (src-tauri/src/web.rs) over HTTP + WebSocket.
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen as tauriListen } from "@tauri-apps/api/event";
+import { getMovedItem } from "./storage";
 
 /** True inside the desktop window, false in a browser. */
 export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-const TOKEN_KEY = "phonedeck.webToken";
+const TOKEN_KEY = "tapfleet.webToken";
+const OLD_TOKEN_KEY = "phonedeck.webToken";
 
 // A link like http://host:1440/?token=abc saves the token and drops it from the address bar.
 if (!inTauri) {
@@ -21,7 +23,7 @@ if (!inTauri) {
 
 export function getToken(): string | null {
   try {
-    return localStorage.getItem(TOKEN_KEY);
+    return getMovedItem(TOKEN_KEY, OLD_TOKEN_KEY);
   } catch {
     return null;
   }

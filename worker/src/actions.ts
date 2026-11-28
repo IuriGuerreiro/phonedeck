@@ -1,5 +1,5 @@
 // Phone actions. Each takes the job payload and returns a small result.
-import { prepareTikTokPost, publishTikTokPost, remoteVideo, type PostContent } from "./platforms/tiktok-posting.ts";
+import { prepareTikTokPost, publishTikTokPost, remoteVideo, oldRemoteVideo, type PostContent } from "./platforms/tiktok-posting.ts";
 import { mkdir, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
@@ -152,7 +152,7 @@ async function posting<T>(job: Extract<Job, { action: "publish_post" | "post_vid
   try {
     const result = await withJobDevice(job, (s) => guard(s, job, () => fn(s, () => void (pressed = true))));
     // The copy on the phone is no longer needed.
-    await run("adb", ["-s", job.serial, "shell", "rm", "-f", remoteVideo(job.postId)], { timeout: 10_000 }).catch(() => {});
+    await run("adb", ["-s", job.serial, "shell", "rm", "-f", remoteVideo(job.postId), oldRemoteVideo(job.postId)], { timeout: 10_000 }).catch(() => {});
     return result;
   } catch (err) {
     if (!pressed && err instanceof Error) err.message = `Not posted: ${err.message}`;

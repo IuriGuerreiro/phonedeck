@@ -2,16 +2,18 @@
 // which switches the color tokens in index.css. index.html applies the saved
 // choice before React loads so the page doesn't flash the wrong theme.
 import { useSyncExternalStore } from "react";
+import { getMovedItem } from "./storage";
 
 export type ThemeChoice = "system" | "light" | "dark";
 
-const KEY = "phonedeck.theme";
+const KEY = "tapfleet.theme";
+const OLD_KEY = "phonedeck.theme";
 const media = window.matchMedia("(prefers-color-scheme: dark)");
 const listeners = new Set<() => void>();
 
 let choice: ThemeChoice = (() => {
   try {
-    const v = localStorage.getItem(KEY);
+    const v = getMovedItem(KEY, OLD_KEY);
     return v === "light" || v === "dark" ? v : "system";
   } catch {
     return "system";
