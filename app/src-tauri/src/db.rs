@@ -327,7 +327,10 @@ impl Db {
             .query_row(
                 "SELECT COALESCE(SUM(json_extract(result, '$.likes')), 0),
                         COALESCE(SUM(json_extract(result, '$.follows')), 0),
-                        COALESCE(SUM((julianday(finished_at) - julianday(started_at)) * 1440), 0)
+                        -- Capped like warmup_days: a run cut off by closing the app is only
+                        -- marked finished at the next start, which would count the whole gap.
+                        COALESCE(SUM(MAX(0, MIN((julianday(finished_at) - julianday(started_at)) * 1440,
+                                                COALESCE(json_extract(payload, '$.minutes'), 10) + 3))), 0)
                  FROM job_runs
                  WHERE serial = ?1 AND action = 'warmup' AND finished_at IS NOT NULL
                    AND json_extract(payload, '$.username') = ?2
@@ -652,6 +655,22 @@ mod tests {
         assert_eq!(days.len(), 7);
         assert_eq!(days.iter().map(|d| d.minutes).collect::<Vec<_>>(), vec![0, 0, 0, 5, 0, 0, 13]);
         assert!(days.windows(2).all(|w| w[0].date < w[1].date));
+    }
+
+    #[test]
+    fn caps_daily_usage_for_runs_cut_off_by_closing_the_app() {
+        let db = Db::open(Path::new(":memory:")).unwrap();
+        let id = db.start_run("A", "warmup", r#"{"username":"ana","minutes":10}"#).unwrap();
+        db.finish_run(id, &Err("App closed before the job finished".into())).unwrap();
+        // Started at local noon, marked finished 6 hours later when the app reopened.
+        db.conn()
+            .execute(
+                "UPDATE job_runs SET started_at = datetime(date('now', 'localtime') || ' 12:00', 'utc'),
+                                     finished_at = datetime(date('now', 'localtime') || ' 18:00', 'utc') WHERE id = ?1",
+                [id],
+            )
+            .unwrap();
+        assert_eq!(db.usage_today("A", "ana").unwrap().minutes, 13);
     }
 
     #[test]

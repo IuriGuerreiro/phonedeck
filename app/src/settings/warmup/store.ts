@@ -41,10 +41,16 @@ const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 let form: WarmupForm = WARMUP_DEFAULTS;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+/** Bumped on every local edit, so a slow load can't overwrite newer typing. */
+let edits = 0;
+/** A save that hasn't reached the app yet. Loads wait for it. */
+let saving: Promise<unknown> = Promise.resolve();
 
 function load() {
-  api.getWarmup().then(
+  const started = edits;
+  saving.then(() => api.getWarmup()).then(
     (saved) => {
+      if (edits !== started || saveTimer) return; // Edited meanwhile: keep the local value.
       const f = (saved as { form?: Partial<WarmupForm> } | null)?.form;
       if (f) {
         form = { ...WARMUP_DEFAULTS, ...f };
@@ -66,24 +72,28 @@ load();
 
 export function setWarmup(next: WarmupForm) {
   form = next;
+  edits++;
   emit();
   // Number fields fire per key; save once typing settles.
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
-    api.setWarmup({ form, options: toOptions(form) }).catch((e) => toast.error(`Couldn't save warm-up settings: ${e}`));
+    saveTimer = undefined;
+    saving = api
+      .setWarmup({ form, options: toOptions(form) })
+      .catch((e) => toast.error(`Couldn't save warm-up settings: ${e}`));
   }, 400);
 }
 
+/** Module-level so React keeps one subscription (an inline one would reload on every render). */
+function subscribe(l: () => void) {
+  listeners.add(l);
+  // Pick up edits made elsewhere (another browser, the desktop window).
+  if (listeners.size === 1) load();
+  return () => listeners.delete(l);
+}
+
 export function useWarmupSettings() {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      // Pick up edits made elsewhere (another browser, the desktop window).
-      if (listeners.size === 1) load();
-      return () => listeners.delete(l);
-    },
-    () => form,
-  );
+  return useSyncExternalStore(subscribe, () => form);
 }
 
 export function toOptions(f: WarmupForm): WarmupOptions {

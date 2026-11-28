@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useState } from "react";
-import { Moon, RotateCcw, Settings, Smartphone, Sun } from "lucide-react";
+import { Menu, Moon, RotateCcw, Settings, Smartphone, Sun, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, type WorkerStatus } from "@/api";
@@ -40,9 +40,14 @@ function Shell() {
   const theme = useResolvedTheme();
   // The open page lives in the URL hash so a reload stays on it.
   const [id, setId] = useState(currentHash);
+  // Small screens only: the sidebar as a slide-over menu.
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    const onHash = () => setId(currentHash());
+    const onHash = () => {
+      setId(currentHash());
+      setMenuOpen(false);
+    };
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
@@ -61,11 +66,29 @@ function Shell() {
   const Page = active.page;
 
   return (
-    <div className="flex min-h-screen bg-background text-foreground">
-      <aside className="flex w-60 shrink-0 flex-col gap-4 border-r bg-sidebar p-3">
+    <div className="flex min-h-screen flex-col bg-background text-foreground md:flex-row">
+      {/* Small screens: a top bar with a menu button instead of the fixed sidebar. */}
+      <header className="sticky top-0 z-30 flex items-center gap-2 border-b bg-sidebar px-3 py-2 md:hidden">
+        <Button variant="ghost" size="icon-sm" aria-label="Open menu" onClick={() => setMenuOpen(true)}>
+          <Menu />
+        </Button>
+        <Smartphone className="size-5" />
+        <div className="flex-1 truncate text-sm font-semibold">Tapfleet · {active.label}</div>
+      </header>
+      {menuOpen && <div className="fixed inset-0 z-40 bg-black/50 md:hidden" onClick={() => setMenuOpen(false)} />}
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r bg-sidebar p-3",
+          "md:sticky md:top-0 md:z-auto md:flex md:h-screen",
+          menuOpen ? "flex" : "hidden",
+        )}
+      >
         <div className="flex items-center gap-2 px-2 pt-1">
           <Smartphone className="size-5" />
-          <div className="text-sm font-semibold leading-tight">Tapfleet</div>
+          <div className="flex-1 text-sm font-semibold leading-tight">Tapfleet</div>
+          <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Close menu" onClick={() => setMenuOpen(false)}>
+            <X />
+          </Button>
         </div>
         {groupFeatures(features).map(([group, items]) => (
           <nav key={group} className="flex flex-col gap-0.5">
@@ -89,7 +112,10 @@ function Shell() {
         <EngineStatus />
         <div className="flex items-center gap-1">
           <button
-            onClick={() => openSettings()}
+            onClick={() => {
+              setMenuOpen(false);
+              openSettings();
+            }}
             className="flex flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground hover:bg-sidebar-accent"
           >
             <Settings className="size-4" /> Settings
@@ -104,7 +130,7 @@ function Shell() {
           </Button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 p-6">
+      <main className="min-w-0 flex-1 p-4 md:p-6">
         <div className={cn("mx-auto flex flex-col gap-4", !active.wide && "max-w-5xl")}>
           <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
             <Page key={active.id} />

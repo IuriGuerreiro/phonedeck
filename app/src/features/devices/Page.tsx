@@ -140,7 +140,7 @@ function DeviceCard({
         <Badge variant={ready ? "secondary" : d.state === "disconnected" ? "outline" : "destructive"}>{state.label}</Badge>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
-        <dl className="grid grid-cols-2 gap-y-1 text-xs">
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-xs">
           <dt className="text-muted-foreground">Serial</dt>
           <dd className="truncate font-mono">{d.serial}</dd>
           <dt className="text-muted-foreground">Accounts</dt>
