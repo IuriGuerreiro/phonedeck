@@ -116,7 +116,7 @@ pub fn start(app: &AppHandle, data_dir: &FsPath) -> WebInfo {
     } else {
         vec![format!("http://{addr}")]
     };
-    println!("[web] PhoneDeck web access on {}", urls.join(", "));
+    println!("[web] Tapfleet web access on {}", urls.join(", "));
     let local_ip = if addr.ip().is_unspecified() { "127.0.0.1".to_string() } else { addr.ip().to_string() };
     let local_url = Some(format!("http://{local_ip}:{port}"));
     WebInfo { enabled: true, port, token, urls, local_url, error: None }

@@ -1,4 +1,4 @@
-//! PC setup: checks the tools PhoneDeck needs and installs missing ones into the app
+//! PC setup: checks the tools Tapfleet needs and installs missing ones into the app
 //! data dir (`<data>/tools`), with no sudo. Rust then hands those paths to the worker.
 //!
 //! Layout:
@@ -38,7 +38,7 @@ pub fn tools_dir_for(app_data_dir: &Path) -> PathBuf {
         .join("tools")
 }
 
-/// Paths of the tools PhoneDeck installs itself.
+/// Paths of the tools Tapfleet installs itself.
 #[derive(Clone)]
 pub struct Managed {
     pub root: PathBuf,
@@ -75,7 +75,7 @@ fn managed() -> Option<Managed> {
     TOOLS_DIR.get().cloned().map(Managed::new)
 }
 
-/// adb installed by PhoneDeck, if any. Used by `adb::adb_path`.
+/// adb installed by Tapfleet, if any. Used by `adb::adb_path`.
 /// The scrcpy server jar next to the scrcpy binary in use (managed install or $SMA_SCRCPY).
 pub fn scrcpy_server() -> Option<PathBuf> {
     let bin = scrcpy_bin();
@@ -87,7 +87,7 @@ pub fn managed_adb() -> Option<PathBuf> {
     managed().map(|m| m.adb()).filter(|p| p.exists())
 }
 
-/// scrcpy to run: $SMA_SCRCPY, else the one PhoneDeck installed, else `scrcpy` on PATH.
+/// scrcpy to run: $SMA_SCRCPY, else the one Tapfleet installed, else `scrcpy` on PATH.
 pub fn scrcpy_bin() -> PathBuf {
     if let Some(p) = std::env::var_os("SMA_SCRCPY") {
         return p.into();
@@ -95,7 +95,7 @@ pub fn scrcpy_bin() -> PathBuf {
     managed().map(|m| m.scrcpy()).filter(|p| p.exists()).unwrap_or_else(|| "scrcpy".into())
 }
 
-/// Env vars for the worker, for every tool PhoneDeck installed itself.
+/// Env vars for the worker, for every tool Tapfleet installed itself.
 pub fn worker_env() -> Vec<(&'static str, OsString)> {
     let Some(m) = managed() else { return vec![] };
     let mut env = vec![];
@@ -123,11 +123,11 @@ pub struct ToolStatus {
     ok: bool,
     version: Option<String>,
     path: Option<String>,
-    /// Installed by PhoneDeck into the data dir.
+    /// Installed by Tapfleet into the data dir.
     managed: bool,
     /// What is wrong, when not ok.
     problem: Option<String>,
-    /// PhoneDeck can install it with one click.
+    /// Tapfleet can install it with one click.
     can_install: bool,
     /// Nice to have; automation works without it.
     optional: bool,
@@ -167,7 +167,7 @@ fn check_node() -> ToolStatus {
     let major = version.as_deref().and_then(|v| v.trim_start_matches('v').split('.').next()?.parse::<u32>().ok());
     let problem = match major {
         None => Some("Node.js not found. Install Node 24+ from nodejs.org (or set SMA_NODE).".into()),
-        Some(m) if m < 24 => Some(format!("Node {m} is too old. PhoneDeck needs Node 24+.")),
+        Some(m) if m < 24 => Some(format!("Node {m} is too old. Tapfleet needs Node 24+.")),
         _ => None,
     };
     ToolStatus {

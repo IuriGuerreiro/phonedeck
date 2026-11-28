@@ -125,7 +125,7 @@ export type SafetyLimits = {
   maxFollowsPerDay: number;
   maxMinutesPerDay: number;
   quietHoursOn: boolean;
-  /** "HH:MM", local time of the PC running PhoneDeck. */
+  /** "HH:MM", local time of the PC running Tapfleet. */
   quietStart: string;
   quietEnd: string;
   breaksOn: boolean;
@@ -164,7 +164,7 @@ export type Schedule = {
   groupId: number | null;
   /** 0 = Sunday … 6 = Saturday. */
   days: number[];
-  /** "HH:MM", local time of the PC running PhoneDeck. */
+  /** "HH:MM", local time of the PC running Tapfleet. */
   times: string[];
   minutes: number;
   /** Starts up to this many minutes late, at random. */

@@ -74,7 +74,7 @@ function Shell() {
       <aside className="flex w-60 shrink-0 flex-col gap-4 border-r bg-sidebar p-3">
         <div className="flex items-center gap-2 px-2 pt-1">
           <Smartphone className="size-5" />
-          <div className="text-sm font-semibold leading-tight">PhoneDeck</div>
+          <div className="text-sm font-semibold leading-tight">Tapfleet</div>
         </div>
         {groupFeatures(features).map(([group, items]) => (
           <nav key={group} className="flex flex-col gap-0.5">

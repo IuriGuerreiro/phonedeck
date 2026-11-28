@@ -49,7 +49,7 @@ fn has_android_rule() -> bool {
 pub async fn install_udev_rule() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(|| {
         let tmp = std::env::temp_dir().join("phonedeck-51-android.rules");
-        fs::write(&tmp, format!("# Added by PhoneDeck: lets adb reach Android phones over USB.\n{UDEV_RULE}\n"))
+        fs::write(&tmp, format!("# Added by Tapfleet: lets adb reach Android phones over USB.\n{UDEV_RULE}\n"))
             .map_err(|e| e.to_string())?;
         let script = format!(
             "install -m 0644 \"$1\" {UDEV_FILE} && udevadm control --reload-rules && udevadm trigger --subsystem-match=usb"

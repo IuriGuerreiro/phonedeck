@@ -37,7 +37,7 @@ export function WebAccessSection() {
 
   return (
     <div className="flex flex-col gap-8">
-      <SettingSection title="Open PhoneDeck in a browser">
+      <SettingSection title="Open Tapfleet in a browser">
         {!info.enabled ? (
           <p className="text-sm text-muted-foreground">
             {info.error ?? "Web access is off (SMA_WEB=0)."}

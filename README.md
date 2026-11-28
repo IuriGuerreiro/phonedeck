@@ -1,4 +1,4 @@
-# PhoneDeck
+# Tapfleet
 
 Desktop app (Tauri + React + shadcn/ui + SQLite) that drives Android phones over USB with Appium.
 
