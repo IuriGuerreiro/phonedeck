@@ -1,9 +1,8 @@
 import { Suspense, useEffect, useState } from "react";
-import { FlaskConical, Moon, RotateCcw, Settings, Smartphone, Sun } from "lucide-react";
+import { Moon, RotateCcw, Settings, Smartphone, Sun } from "lucide-react";
 import { toast } from "sonner";
 
 import { api, type WorkerStatus } from "@/api";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { features, type Feature } from "@/features";
@@ -13,7 +12,7 @@ import { SettingsProvider, useSettings } from "@/settings/SettingsContext";
 import { setupApi } from "@/setup/api";
 import { WebAuthGate } from "@/components/WebAuthGate";
 
-/** Opened when the hash names no page. A real page, not a preview. */
+/** Opened when the hash names no page. */
 const HOME = "devices";
 
 /** Feature id from the hash. "#devices/R58N" opens "devices"; the page reads the rest. */
@@ -41,8 +40,6 @@ function Shell() {
   const theme = useResolvedTheme();
   // The open page lives in the URL hash so a reload stays on it.
   const [id, setId] = useState(currentHash);
-  // Bumped by Reset to remount the page with fresh state.
-  const [resetCount, setResetCount] = useState(0);
 
   useEffect(() => {
     const onHash = () => setId(currentHash());
@@ -62,12 +59,6 @@ function Shell() {
 
   const active = features.find((f) => f.id === id) ?? features.find((f) => f.id === HOME)!;
   const Page = active.page;
-
-  function reset() {
-    active.reset?.();
-    setResetCount((n) => n + 1);
-    toast.success("Sample data reset");
-  }
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -91,11 +82,6 @@ function Shell() {
                 <f.icon className="size-4 shrink-0" />
                 <span className="flex-1 truncate">{f.label}</span>
                 {f.useCount && <CountBadge useCount={f.useCount} />}
-                {f.preview && (
-                  <Badge variant="outline" title="Sample data, not connected yet">
-                    Preview
-                  </Badge>
-                )}
               </a>
             ))}
           </nav>
@@ -120,21 +106,8 @@ function Shell() {
       </aside>
       <main className="min-w-0 flex-1 p-6">
         <div className={cn("mx-auto flex flex-col gap-4", !active.wide && "max-w-5xl")}>
-          {active.preview && (
-            <div className="flex items-center gap-3 rounded-lg border border-dashed bg-muted/40 px-3 py-2 text-sm">
-              <FlaskConical className="size-4 shrink-0 text-muted-foreground" />
-              <span className="flex-1 text-muted-foreground">
-                Preview: this page shows sample data. It is not connected to your phones yet.
-              </span>
-              {active.reset && (
-                <Button variant="ghost" size="sm" onClick={reset} title="Reset sample data">
-                  <RotateCcw /> Reset
-                </Button>
-              )}
-            </div>
-          )}
           <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-            <Page key={`${active.id}-${resetCount}`} />
+            <Page key={active.id} />
           </Suspense>
         </div>
       </main>

@@ -228,6 +228,12 @@ fn set_group_member(db: State<'_, Db>, group_id: i64, account_id: i64, member: b
     db.set_group_member(group_id, account_id, member)
 }
 
+/// Warm-up minutes per day, for the dashboard chart.
+#[tauri::command(async)]
+fn warmup_days(db: State<'_, Db>, days: Option<u32>) -> CmdResult<Vec<db::DayMinutes>> {
+    db.warmup_days(days.unwrap_or(7))
+}
+
 /// Accounts on one phone, or on every phone when `serial` is omitted.
 #[tauri::command(async)]
 fn list_accounts(db: State<'_, Db>, serial: Option<String>) -> CmdResult<Vec<Account>> {
@@ -352,6 +358,7 @@ pub fn run() {
             get_warmup,
             set_warmup,
             usage_today,
+            warmup_days,
             save_group,
             delete_group,
             set_group_member,

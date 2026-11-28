@@ -79,6 +79,9 @@ export type Account = {
   status: "ok" | "needs_attention";
   note: string | null;
   lastWarmupAt: string | null;
+  captchas7d: number;
+  /** Failures that are about the account, not the PC or the connection. */
+  errors7d: number;
 };
 
 export type JobProgress = { serial: string; message: string };
@@ -239,6 +242,8 @@ export const api = {
   setWarmup: (value: unknown) => invoke<void>("set_warmup", { value }),
   getSafety: () => invoke<SafetyLimits>("get_safety"),
   setSafety: (safety: SafetyLimits) => invoke<SafetyLimits>("set_safety", { safety }),
+  /** Minutes per local day ("YYYY-MM-DD"), oldest first. */
+  warmupDays: (days: number) => invoke<{ date: string; minutes: number }[]>("warmup_days", { days }),
   usageToday: (serial: string, username: string) => invoke<Usage>("usage_today", { serial, username }),
   webInfo: () => invoke<WebInfo>("web_info"),
   liveJobs: () => invoke<LiveJob[]>("live_jobs"),

@@ -294,6 +294,10 @@ async fn dispatch(app: &AppHandle, name: &str, a: Value) -> Result<Reply, String
             let (serial, username): (String, String) = (arg(&a, "serial")?, arg(&a, "username")?);
             to_json(blocking(app, move |x| crate::usage_today(x.state(), serial, username)).await?)
         }
+        "warmup_days" => {
+            let days: Option<u32> = arg(&a, "days")?;
+            to_json(blocking(app, move |x| crate::warmup_days(x.state(), days)).await?)
+        }
         "list_alerts" => to_json(blocking(app, |x| crate::alerts::list_alerts(x.state())).await?),
         "resolve_alert" => {
             let id: i64 = arg(&a, "id")?;

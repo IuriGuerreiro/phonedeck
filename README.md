@@ -5,12 +5,10 @@ Desktop app (Tauri + React + shadcn/ui + SQLite) that drives Android phones over
 ```
 app/            Tauri desktop app (React UI in src/, Rust in src-tauri/)
 worker/         Node worker: starts Appium, runs phone jobs (WebdriverIO)
-mock-ui/        Sandbox for trying UI ideas with fake data (no Tauri)
 ```
 
 UI layout (`app/src`): one folder per sidebar page in `features/`, registered in
 `features/index.ts`. Real data goes through `data/` (wrappers over `api.ts`).
-Pages marked `preview: true` still use the sample data in `mocks/` and show a "Preview" badge.
 
 How it fits: React → Rust commands → SQLite. Rust starts the worker; the worker starts
 Appium and keeps one session per phone. Rust and the worker talk JSON lines over stdin/stdout.

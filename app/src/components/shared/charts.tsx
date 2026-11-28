@@ -103,24 +103,3 @@ export function BarChart({ data, unit }: { data: Point[]; unit: string }) {
     </Frame>
   );
 }
-
-export function LineChart({ data, unit }: { data: Point[]; unit: string }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const values = data.map((d) => d.value);
-  const max = niceMax(Math.max(...values));
-  const xFor = (i: number) => PAD.left + (data.length <= 1 ? 0 : (i / (data.length - 1)) * plotW);
-  const y = (v: number) => PAD.top + plotH - (v / max) * plotH;
-  const line = data.map((d, i) => `${i ? "L" : "M"}${xFor(i)},${y(d.value)}`).join(" ");
-
-  return (
-    <Frame max={max} data={data} unit={unit} hover={hover} setHover={setHover} xFor={xFor}>
-      <path d={line} fill="none" className="stroke-primary" strokeWidth={2} strokeLinejoin="round" />
-      {hover !== null && (
-        <>
-          <line x1={xFor(hover)} x2={xFor(hover)} y1={PAD.top} y2={PAD.top + plotH} className="stroke-muted-foreground" strokeDasharray="3 3" />
-          <circle cx={xFor(hover)} cy={y(data[hover].value)} r={4} className="fill-primary stroke-background" strokeWidth={2} />
-        </>
-      )}
-    </Frame>
-  );
-}

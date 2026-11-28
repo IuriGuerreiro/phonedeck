@@ -178,6 +178,19 @@ pub struct Account {
     pub status: String,
     pub note: Option<String>,
     pub last_warmup_at: Option<String>,
+    /// Last 7 days. A captcha counts as the user labelled it, else as guessed.
+    pub captchas_7d: u32,
+    /// Failed jobs in the last 7 days that say something about the account: not PC or
+    /// connection trouble, and not stops that became an alert.
+    pub errors_7d: u32,
+}
+
+/// Warm-up minutes on one local day, all accounts.
+#[derive(Serialize, Debug, PartialEq)]
+pub struct DayMinutes {
+    /// "YYYY-MM-DD"
+    pub date: String,
+    pub minutes: u32,
 }
 
 /// What a finished job means for an account's row.
@@ -331,6 +344,32 @@ impl Db {
             .map_err(|e| e.to_string())
     }
 
+    /// Warm-up minutes for each of the last `days` local days, oldest first, empty days included.
+    /// A run never counts for more than it was asked to last: one cut off by closing the app
+    /// is only marked finished the next time the app opens.
+    pub fn warmup_days(&self, days: u32) -> Result<Vec<DayMinutes>, String> {
+        let conn = self.conn();
+        let mut stmt = conn
+            .prepare(
+                "WITH RECURSIVE d(n) AS (SELECT ?1 - 1 UNION ALL SELECT n - 1 FROM d WHERE n > 0),
+                 runs AS (
+                   SELECT date(started_at, 'localtime') AS day,
+                          MAX(0, MIN((julianday(finished_at) - julianday(started_at)) * 1440,
+                                     COALESCE(json_extract(payload, '$.minutes'), 10) + 3)) AS minutes
+                   FROM job_runs WHERE action = 'warmup' AND finished_at IS NOT NULL
+                     AND COALESCE(error, '') NOT LIKE 'App closed before%'
+                     AND started_at > datetime('now', '-' || (?1 + 1) || ' days'))
+                 SELECT date('now', 'localtime', '-' || n || ' days') AS day,
+                        (SELECT COALESCE(SUM(minutes), 0) FROM runs WHERE runs.day = date('now', 'localtime', '-' || n || ' days'))
+                 FROM d ORDER BY n DESC",
+            )
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([days.clamp(1, 90)], |r| Ok(DayMinutes { date: r.get(0)?, minutes: r.get::<_, f64>(1)?.round() as u32 }))
+            .map_err(|e| e.to_string())?;
+        rows.collect::<rusqlite::Result<_>>().map_err(|e| e.to_string())
+    }
+
     #[cfg(test)]
     pub fn backdate_run_start(&self, id: i64, minutes: i64) -> rusqlite::Result<()> {
         self.conn().execute(
@@ -398,7 +437,25 @@ impl Db {
     pub fn accounts(&self, serial: Option<&str>) -> rusqlite::Result<Vec<Account>> {
         let conn = self.conn();
         let mut stmt = conn.prepare(
-            "SELECT id, serial, platform, username, status, note, last_warmup_at
+            "SELECT id, serial, platform, username, status, note, last_warmup_at,
+               (SELECT count(*) FROM alerts l
+                 WHERE l.serial = accounts.serial AND l.platform = accounts.platform AND l.username = accounts.username
+                   AND COALESCE(l.label, l.kind) = 'captcha'
+                   AND julianday(l.created_at) > julianday('now', '-7 days')),
+               (SELECT count(*) FROM job_runs r
+                 WHERE r.serial = accounts.serial AND r.status = 'error'
+                   AND r.started_at > datetime('now', '-7 days')
+                   AND json_extract(r.payload, '$.platform') = accounts.platform
+                   AND json_extract(r.payload, '$.username') = accounts.username
+                   AND r.error NOT LIKE '%App closed before%' AND r.error NOT LIKE '%Worker stopped%'
+                   AND r.error NOT LIKE '%Could not reach worker%' AND r.error NOT LIKE '%engine is not ready%'
+                   AND r.error NOT LIKE '%Unable to connect to%' AND r.error NOT LIKE '%WebDriverError%'
+                   AND r.error NOT LIKE '%Phone on hold%' AND r.error NOT LIKE '%Could not copy the video%'
+                   AND r.error NOT LIKE '%adb: device%' AND r.error NOT LIKE '%was not in the list of connected devices%'
+                   AND NOT EXISTS (SELECT 1 FROM alerts l WHERE l.serial = r.serial
+                     AND l.message != '' AND instr(r.error, l.message) > 0
+                     AND julianday(l.created_at) >= julianday(r.started_at)
+                     AND julianday(l.created_at) <= julianday(COALESCE(r.finished_at, 'now'), '+2 seconds')))
              FROM accounts WHERE ?1 IS NULL OR serial = ?1
              ORDER BY platform, username COLLATE NOCASE",
         )?;
@@ -411,6 +468,8 @@ impl Db {
                 status: r.get(4)?,
                 note: r.get(5)?,
                 last_warmup_at: r.get(6)?,
+                captchas_7d: r.get(7)?,
+                errors_7d: r.get(8)?,
             })
         })?;
         rows.collect()
@@ -570,6 +629,57 @@ mod tests {
         assert!(db.save_account_snapshot("A", "tiktok", "one", -1, 0, 0).is_err());
         db.delete_account(account.id).unwrap();
         assert!(db.account_snapshots().unwrap().is_empty());
+    }
+
+    #[test]
+    fn counts_warmup_minutes_per_day() {
+        let db = Db::open(Path::new(":memory:")).unwrap();
+        let run = |minutes: i64, error: Option<&str>| {
+            let id = db.start_run("A", "warmup", r#"{"username":"ana","minutes":10}"#).unwrap();
+            db.finish_run(id, &error.map_or(Ok("{}".into()), |e| Err(e.into()))).unwrap();
+            db.backdate_run_start(id, minutes).unwrap();
+            id
+        };
+        run(0, None);
+        // Finished late: capped. Cut off by closing the app: unknown, so not counted.
+        let late = run(0, None);
+        db.conn().execute("UPDATE job_runs SET finished_at = datetime('now', '+20 hours') WHERE id = ?1", [late]).unwrap();
+        let cut = run(0, Some("App closed before the job finished"));
+        db.conn().execute("UPDATE job_runs SET finished_at = datetime('now', '+20 hours') WHERE id = ?1", [cut]).unwrap();
+        let old = run(0, None);
+        db.conn().execute("UPDATE job_runs SET started_at = datetime('now', '-3 days'), finished_at = datetime('now', '-3 days', '+5 minutes') WHERE id = ?1", [old]).unwrap();
+        let days = db.warmup_days(7).unwrap();
+        assert_eq!(days.len(), 7);
+        assert_eq!(days.iter().map(|d| d.minutes).collect::<Vec<_>>(), vec![0, 0, 0, 5, 0, 0, 13]);
+        assert!(days.windows(2).all(|w| w[0].date < w[1].date));
+    }
+
+    #[test]
+    fn counts_captchas_and_failures_per_account() {
+        let db = Db::open(Path::new(":memory:")).unwrap();
+        db.upsert_account("A", "tiktok", "ana", AccountEvent::Seen).unwrap();
+        db.upsert_account("A", "tiktok", "bob", AccountEvent::Seen).unwrap();
+        let fail = |error: &str| {
+            let id = db.start_run("A", "warmup", r#"{"platform":"tiktok","username":"ana"}"#).unwrap();
+            db.finish_run(id, &Err(error.into())).unwrap();
+        };
+        let alert = |kind: &str, message: &str| {
+            db.add_alert(&serde_json::json!({ "serial": "A", "platform": "tiktok", "username": "ana", "kind": kind, "message": message })).unwrap()
+        };
+        fail("@ana is not logged in");
+        fail("App closed before the job finished");
+        fail("Unable to connect to 127.0.0.1");
+        alert("captcha", "Looks like a captcha");
+        fail("Looks like a captcha");
+        let wrong = alert("captcha", "other");
+        db.label_alert(wrong, "false_alarm").unwrap();
+        let relabelled = alert("unknown", "odd");
+        db.label_alert(relabelled, "captcha").unwrap();
+        let old = alert("captcha", "old");
+        db.conn().execute("UPDATE alerts SET created_at = datetime('now', '-8 days') WHERE id = ?1", [old]).unwrap();
+        let a = db.accounts(None).unwrap();
+        assert_eq!((a[0].captchas_7d, a[0].errors_7d), (2, 1));
+        assert_eq!((a[1].captchas_7d, a[1].errors_7d), (0, 0));
     }
 
     #[test]

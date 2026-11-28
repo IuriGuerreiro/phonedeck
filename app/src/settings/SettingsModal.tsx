@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { RotateCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { settingsSections, type SettingsSectionDef } from "./sections";
@@ -73,7 +72,6 @@ export function SettingsModal({ section, onSection, onClose }: Props) {
                 >
                   <s.icon className="size-4" />
                   <span className="flex-1">{s.label}</span>
-                  {s.preview && <Badge variant="outline">Preview</Badge>}
                 </button>
               ))}
             </nav>
@@ -87,9 +85,6 @@ export function SettingsModal({ section, onSection, onClose }: Props) {
               <span className="text-muted-foreground">Settings</span>
               <span className="mx-2 text-muted-foreground">/</span>
               <span className="font-medium">{active.label}</span>
-              {active.preview && (
-                <span className="ml-2 text-xs text-muted-foreground">Preview: not used by jobs yet</span>
-              )}
             </div>
             {active.restoreDefaults && (
               <Button

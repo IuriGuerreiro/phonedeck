@@ -1,12 +1,12 @@
 // Account health: a 0–100 score with the reasons behind it.
 import { parseTime } from "@/lib/time";
 
-/** What the score needs. The 7-day counts are optional until the app tracks them. */
+/** What the score needs. */
 type HealthInput = {
   status: "ok" | "needs_attention";
   lastWarmupAt: string | null;
-  captchas7d?: number;
-  errors7d?: number;
+  captchas7d: number;
+  errors7d: number;
 };
 
 export type HealthLevel = "good" | "fair" | "poor";
@@ -25,8 +25,7 @@ export function accountHealth(a: HealthInput): Health {
     else if (days > 1.5) hit("Inactive >1d", 10);
   }
 
-  const captchas = a.captchas7d ?? 0;
-  const errors = a.errors7d ?? 0;
+  const { captchas7d: captchas, errors7d: errors } = a;
   hit(`${captchas} captcha${captchas === 1 ? "" : "s"} (7d)`, Math.min(24, captchas * 8));
   hit(`${errors} failed job${errors === 1 ? "" : "s"} (7d)`, Math.min(15, errors * 5));
 

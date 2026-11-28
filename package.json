@@ -4,7 +4,6 @@
   "scripts": {
     "setup": "npm --prefix worker install && npm --prefix worker run appium:setup && npm --prefix app install",
     "dev": "npm --prefix app run tauri dev",
-    "dev:mock": "npm --prefix mock-ui run dev",
     "check": "npm --prefix worker run typecheck && npm --prefix worker test && npm --prefix app run build && npm --prefix app test && cargo test --manifest-path app/src-tauri/Cargo.toml"
   }
 }
