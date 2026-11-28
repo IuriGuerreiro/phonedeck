@@ -30,7 +30,9 @@ async function pushVideo(serial: string, file: string, remotePath: string) {
   }
 }
 
-export const remoteVideo = (postId: number) => `/sdcard/Download/phonedeck-${postId}.mp4`;
+export const remoteVideo = (postId: number) => `/sdcard/Download/tapfleet-${postId}.mp4`;
+/** Name used before the rename to Tapfleet; a post prepared then may still have its copy there. */
+export const oldRemoteVideo = (postId: number) => `/sdcard/Download/phonedeck-${postId}.mp4`;
 
 export async function prepareTikTokPost(s: Browser, serial: string, content: PostContent) {
   const remotePath = remoteVideo(content.postId);
@@ -81,10 +83,22 @@ export async function publishTikTokPost(s: Browser, username: string, content: P
   onPress();
   await button.click();
   await sleep(1500);
+  if (content.visibility === "public") await confirmPublic(s);
   if (await findAny(s, POST, 1500)) throw new Error("TikTok is still showing the publish screen. Check the phone before trying again.");
   note("Uploading to TikTok…");
   await confirmPosted(s, username, content);
   return { posted: true };
+}
+
+const PUBLISH_NOW = /^(post now|publicar agora|publicar ahora)$/i;
+
+/** A public account's "Post video publicly?" question. Only answered for posts meant for everyone. */
+async function confirmPublic(s: Browser) {
+  const yes = parseScreen((await readScreen(s)) ?? "").find((n) => n.pkg === PKG && PUBLISH_NOW.test((n.text || n.desc).trim()));
+  if (!yes) return;
+  const [x1, y1, x2, y2] = yes.box;
+  await tap(s, (x1 + x2) / 2, (y1 + y2) / 2);
+  await sleep(1500);
 }
 
 /** 4 minutes plus one per 25 MB: 24 minutes for the largest video. */

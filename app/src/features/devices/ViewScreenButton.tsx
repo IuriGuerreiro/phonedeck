@@ -15,7 +15,7 @@ export function ViewScreenButton({ device: d }: { device: Device }) {
       size="sm"
       variant="outline"
       disabled={!isReady(d)}
-      onClick={() => api.viewPhone(d.serial, `PhoneDeck · ${deviceLabel(d)}`).catch((e) => toast.error(String(e)))}
+      onClick={() => api.viewPhone(d.serial, `Tapfleet · ${deviceLabel(d)}`).catch((e) => toast.error(String(e)))}
     >
       <Monitor /> View screen
     </Button>

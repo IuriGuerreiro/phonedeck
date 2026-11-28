@@ -88,11 +88,11 @@ impl Worker {
 
         let dir = worker_dir();
         let log_dir = app.path().app_log_dir().unwrap_or_else(|_| std::env::temp_dir());
-        let node = std::env::var_os("SMA_NODE").unwrap_or_else(|| "node".into());
+        let node = crate::rename::var_os("NODE").unwrap_or_else(|| "node".into());
         let spawned = Command::new(&node)
             .arg(dir.join("src/main.ts"))
             .current_dir(&dir)
-            .env("SMA_LOG_DIR", &log_dir)
+            .env("TAPFLEET_LOG_DIR", &log_dir)
             .envs(crate::setup::worker_env())
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -225,7 +225,7 @@ fn set_status(app: &AppHandle, status: &Mutex<WorkerStatus>, next: WorkerStatus)
 }
 
 pub(crate) fn worker_dir() -> PathBuf {
-    std::env::var_os("SMA_WORKER_DIR")
+    crate::rename::var_os("WORKER_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../worker"))
 }

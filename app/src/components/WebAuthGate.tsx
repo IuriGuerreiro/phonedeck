@@ -50,7 +50,7 @@ function TokenPrompt({ onDone }: { onDone: () => void }) {
         setError("That token is wrong.");
       }
     } catch {
-      setError("Can't reach PhoneDeck. Is the app running on the PC?");
+      setError("Can't reach Tapfleet. Is the app running on the PC?");
     } finally {
       setBusy(false);
     }
@@ -61,7 +61,7 @@ function TokenPrompt({ onDone }: { onDone: () => void }) {
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-4 rounded-xl border p-6">
         <div className="flex items-center gap-2">
           <Smartphone className="size-5" />
-          <h1 className="text-base font-semibold">PhoneDeck</h1>
+          <h1 className="text-base font-semibold">Tapfleet</h1>
         </div>
         <p className="text-sm text-muted-foreground">
           Paste the web access token. Find it in the desktop app under Settings → Web access.

@@ -13,7 +13,9 @@ use crate::adb::{adb_path, run as adb};
 /// Gives the logged-in user access to any USB device that exposes an adb interface
 /// (class ff, subclass 42, protocol 01), whatever the vendor.
 const UDEV_RULE: &str = r#"SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ENV{ID_USB_INTERFACES}=="*:ff4201:*", MODE="0660", TAG+="uaccess""#;
-const UDEV_FILE: &str = "/etc/udev/rules.d/51-phonedeck-android.rules";
+const UDEV_FILE: &str = "/etc/udev/rules.d/51-tapfleet-android.rules";
+/// Installed before the rename to Tapfleet. Counts as installed, so the rule isn't added twice.
+const OLD_UDEV_FILE: &str = "/etc/udev/rules.d/51-phonedeck-android.rules";
 const UDEV_DIRS: [&str; 3] = ["/etc/udev/rules.d", "/usr/lib/udev/rules.d", "/lib/udev/rules.d"];
 
 #[derive(Serialize)]
@@ -38,6 +40,9 @@ pub fn udev_status() -> UdevStatus {
 }
 
 fn has_android_rule() -> bool {
+    if std::path::Path::new(OLD_UDEV_FILE).exists() {
+        return true;
+    }
     UDEV_DIRS.iter().filter_map(|d| fs::read_dir(d).ok()).flatten().filter_map(Result::ok).any(|e| {
         let name = e.file_name().to_string_lossy().to_lowercase();
         name.contains("android") || fs::read_to_string(e.path()).is_ok_and(|t| t.contains("ff4201"))
@@ -48,8 +53,8 @@ fn has_android_rule() -> bool {
 #[tauri::command]
 pub async fn install_udev_rule() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(|| {
-        let tmp = std::env::temp_dir().join("phonedeck-51-android.rules");
-        fs::write(&tmp, format!("# Added by PhoneDeck: lets adb reach Android phones over USB.\n{UDEV_RULE}\n"))
+        let tmp = std::env::temp_dir().join("tapfleet-51-android.rules");
+        fs::write(&tmp, format!("# Added by Tapfleet: lets adb reach Android phones over USB.\n{UDEV_RULE}\n"))
             .map_err(|e| e.to_string())?;
         let script = format!(
             "install -m 0644 \"$1\" {UDEV_FILE} && udevadm control --reload-rules && udevadm trigger --subsystem-match=usb"
@@ -190,7 +195,7 @@ mod tests {
 
     #[test]
     fn finds_helper_apks_in_install_order() {
-        let root = std::env::temp_dir().join(format!("phonedeck-apks-{}", std::process::id()));
+        let root = std::env::temp_dir().join(format!("tapfleet-apks-{}", std::process::id()));
         let nm = root.join("node_modules/appium-uiautomator2-driver/node_modules");
         for f in [
             "appium-uiautomator2-server/apks/appium-uiautomator2-server-debug-androidTest.apk",

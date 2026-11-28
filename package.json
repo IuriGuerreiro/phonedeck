@@ -1,5 +1,5 @@
 {
-  "name": "phonedeck",
+  "name": "tapfleet",
   "private": true,
   "scripts": {
     "setup": "npm --prefix worker install && npm --prefix worker run appium:setup && npm --prefix app install",

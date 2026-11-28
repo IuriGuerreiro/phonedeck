@@ -46,7 +46,7 @@ export async function startAppium(port: number, logDir: string): Promise<AppiumS
   throw new Error("Appium did not start within 90s");
 }
 
-async function isUp(port: number): Promise<boolean> {
+export async function isUp(port: number): Promise<boolean> {
   try {
     const res = await fetch(`http://127.0.0.1:${port}/status`);
     return res.ok;

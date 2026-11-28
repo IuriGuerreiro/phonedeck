@@ -108,7 +108,7 @@ function ToolRow(props: {
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 text-sm font-medium">
             {t.name}
-            {t.managed && <Badge variant="secondary">installed by PhoneDeck</Badge>}
+            {t.managed && <Badge variant="secondary">installed by Tapfleet</Badge>}
             {t.optional && !t.ok && <Badge variant="outline">optional</Badge>}
           </div>
           <div className="truncate text-xs text-muted-foreground" title={t.path ?? ""}>

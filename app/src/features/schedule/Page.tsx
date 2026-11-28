@@ -103,7 +103,7 @@ export default function SchedulePage() {
         <div>
           <h1 className="text-lg font-semibold">Schedule</h1>
           <p className="text-sm text-muted-foreground">
-            Warm-ups start on their own while PhoneDeck is running. Quiet hours and daily limits from{" "}
+            Warm-ups start on their own while Tapfleet is running. Quiet hours and daily limits from{" "}
             <button className="underline underline-offset-4" onClick={() => openSettings("safety")}>
               Safety
             </button>{" "}

@@ -12,6 +12,7 @@ import { accountsApi, type Account } from "@/data/accounts";
 import { deviceLabel, devicesApi, deviceState, isReady, type Device } from "@/data/devices";
 import { timeAgo } from "@/lib/time";
 import { setupApi, type PhoneInfo } from "@/setup/api";
+import { BatteryLife } from "@/components/shared/BatteryLife";
 import { BatteryLevel } from "@/components/shared/BatteryLevel";
 import { fmtBytes, liveJobText, useDeviceStats, useLiveJobs } from "@/data/live";
 import { RunsTable } from "../activity/Page";
@@ -143,6 +144,7 @@ export function DeviceDetail({ serial }: { serial: string }) {
                     "—"
                   ),
                 ],
+                ["Battery life", (stats && (stats.batteryHealth || stats.batteryCapacityMah != null)) ? <BatteryLife stats={stats} model={device.model} /> : "—"],
                 [
                   "Helpers",
                   info ? (

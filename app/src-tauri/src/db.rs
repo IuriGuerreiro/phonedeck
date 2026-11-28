@@ -495,7 +495,7 @@ mod tests {
 
     #[test]
     fn groups_persist_and_apply_only_to_assigned_accounts() {
-        let path = std::env::temp_dir().join(format!("sma-groups-{}.db", std::process::id()));
+        let path = std::env::temp_dir().join(format!("tapfleet-groups-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let db = Db::open(&path).unwrap();
         db.upsert_account("A", "tiktok", "one", AccountEvent::Seen).unwrap();
@@ -574,7 +574,7 @@ mod tests {
 
     #[test]
     fn lists_accounts_for_one_phone_or_all() {
-        let path = std::env::temp_dir().join(format!("sma-test-{}.db", std::process::id()));
+        let path = std::env::temp_dir().join(format!("tapfleet-test-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let db = Db::open(&path).unwrap();
         db.upsert_account("A", "tiktok", "one", AccountEvent::Seen).unwrap();

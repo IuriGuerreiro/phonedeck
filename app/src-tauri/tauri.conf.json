@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "PhoneDeck",
+  "productName": "Tapfleet",
   "version": "0.1.0",
-  "identifier": "com.sma.desktop",
+  "identifier": "app.tapfleet.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,8 @@
   "app": {
     "windows": [
       {
-        "title": "PhoneDeck",
+        "title": "Tapfleet",
+        "create": false,
         "width": 1100,
         "height": 720,
         "minWidth": 800,

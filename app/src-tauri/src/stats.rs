@@ -14,6 +14,10 @@ pub struct DeviceStats {
     pub charging: bool,
     /// °C.
     pub battery_temp: Option<f32>,
+    /// Android's own verdict, e.g. "good" or "overheating".
+    pub battery_health: Option<&'static str>,
+    /// What a full charge holds now, from the charge counter. Not exact.
+    pub battery_capacity_mah: Option<u32>,
     pub storage_used_bytes: Option<u64>,
     pub storage_total_bytes: Option<u64>,
     pub ram_total_bytes: Option<u64>,
@@ -22,7 +26,7 @@ pub struct DeviceStats {
 }
 
 /// Plain text only: the phone's shell would read `<`, `>` or `|` as redirects.
-const SEP: &str = "@@SMA_SEP@@";
+const SEP: &str = "@@TAPFLEET_SEP@@";
 
 /// One adb round trip for everything. Needs the phone in adb state "device".
 #[tauri::command]
@@ -101,6 +105,22 @@ fn parse(text: &str) -> DeviceStats {
     s.charging = field("status").as_deref() == Some("2") || (powered && field("status").as_deref() != Some("5"));
     s.battery_temp = field("temperature").and_then(|v| v.parse::<f32>().ok()).map(|t| t / 10.0);
 
+    s.battery_health = match field("health").as_deref() {
+        Some("2") => Some("good"),
+        Some("3") => Some("overheating"),
+        Some("4") => Some("dead"),
+        Some("5") => Some("over_voltage"),
+        Some("6") => Some("failing"),
+        Some("7") => Some("cold"),
+        _ => None,
+    };
+    // µAh in the battery now, scaled up to 100%. Too rough on a nearly empty battery.
+    let counter = field("Charge counter").and_then(|v| v.parse::<f64>().ok());
+    if let (Some(uah), Some(level @ 20..)) = (counter, s.battery) {
+        let mah = uah / 1000.0 * 100.0 / level as f64;
+        s.battery_capacity_mah = (500.0..20_000.0).contains(&mah).then_some(mah.round() as u32);
+    }
+
     // Header, then "fs 1K-blocks used available use% mount". Old toybox may wrap the line.
     let nums: Vec<u64> = df
         .lines()
@@ -148,6 +168,16 @@ mod tests {
         assert_eq!(s.storage_used_bytes, Some(74_000_000 * 1024));
         assert_eq!(s.ram_total_bytes, Some(5_767_180 * 1024));
         assert_eq!(s.screen.as_deref(), Some("1080x2400"));
+    }
+
+    #[test]
+    fn estimates_battery_life() {
+        let s = parse("  Charge counter: 2167270\n  health: 2\n  level: 50\n");
+        assert_eq!((s.battery_health, s.battery_capacity_mah), (Some("good"), Some(4335)));
+        // Too empty, a phone that reports 0, and one that reports nothing.
+        assert_eq!(parse("  Charge counter: 200000\n  level: 5\n").battery_capacity_mah, None);
+        assert_eq!(parse("  Charge counter: 0\n  level: 80\n").battery_capacity_mah, None);
+        assert_eq!(parse("  level: 80\n  health: 1\n").battery_health, None);
     }
 
     #[test]

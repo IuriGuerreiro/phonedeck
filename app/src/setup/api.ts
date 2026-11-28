@@ -9,7 +9,7 @@ export type ToolStatus = {
   ok: boolean;
   version: string | null;
   path: string | null;
-  /** Installed by PhoneDeck into its data dir. */
+  /** Installed by Tapfleet into its data dir. */
   managed: boolean;
   problem: string | null;
   canInstall: boolean;

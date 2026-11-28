@@ -171,7 +171,7 @@ export function MirrorScreen({ serial, ready, size = "md", paused = false, unava
     (async () => {
       const url = await mirrorUrl(serial, MAX_SIZE[size], canDecode, audio !== null);
       if (closed) return;
-      if (!url) return fail("Web access is off (SMA_WEB=0), so the live screen can't run.");
+      if (!url) return fail("Web access is off (TAPFLEET_WEB=0), so the live screen can't run.");
       ws = new WebSocket(url);
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;

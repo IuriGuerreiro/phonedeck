@@ -87,7 +87,7 @@ function ToolsStep({ tools, onTools }: { tools: Tool[]; onTools: (t: Tool[]) => 
       <CardHeader className="flex flex-row items-center justify-between gap-3">
         <div>
           <CardTitle>Dependencies</CardTitle>
-          <CardDescription>Installed locally in PhoneDeck's app folder.</CardDescription>
+          <CardDescription>Installed locally in Tapfleet's app folder.</CardDescription>
         </div>
         {missing.length > 0 && (
           <Button disabled={!!installing} onClick={() => install(missing)}>

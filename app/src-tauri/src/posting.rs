@@ -190,7 +190,7 @@ mod tests {
         let db = Db::open(std::path::Path::new(":memory:")).unwrap();
         let id = draft(&db, account(&db));
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let dir = std::env::temp_dir().join(format!("sma-upload-{}-{stamp}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("tapfleet-upload-{}-{stamp}", std::process::id()));
         let media = Media::new(dir.clone()).unwrap();
         assert!(append_chunk(&db, &media, id, 1, vec![0]).is_err());
         append_chunk(&db, &media, id, 0, b"\0\0\0\x0cftyp".to_vec()).unwrap();
@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn restart_preserves_uncertainty_instead_of_retrying_a_publish() {
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let path = std::env::temp_dir().join(format!("sma-post-recovery-{}-{stamp}.db", std::process::id()));
+        let path = std::env::temp_dir().join(format!("tapfleet-post-recovery-{}-{stamp}.db", std::process::id()));
         let db = Db::open(&path).unwrap();
         let aid = account(&db);
         let ready = draft(&db, aid);

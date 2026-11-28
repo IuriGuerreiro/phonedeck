@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn retains_history_and_empty_collections_without_converting_missing_counts_to_zero() {
         let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos();
-        let path = std::env::temp_dir().join(format!("sma-video-{}-{stamp}.db", std::process::id()));
+        let path = std::env::temp_dir().join(format!("tapfleet-video-{}-{stamp}.db", std::process::id()));
         let db = Db::open(&path).unwrap();
         db.upsert_account("A", "tiktok", "one", AccountEvent::Seen).unwrap();
         db.upsert_account("B", "tiktok", "two", AccountEvent::Seen).unwrap();

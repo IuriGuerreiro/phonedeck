@@ -677,7 +677,7 @@ mod tests {
 
     #[test]
     fn saves_claims_and_plans() {
-        let path = std::env::temp_dir().join(format!("sma-sched-{}.db", std::process::id()));
+        let path = std::env::temp_dir().join(format!("tapfleet-sched-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let db = Db::open(&path).unwrap();
 

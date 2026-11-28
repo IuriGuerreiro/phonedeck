@@ -1,4 +1,4 @@
-# PhoneDeck
+# Tapfleet
 
 Desktop app (Tauri + React + shadcn/ui + SQLite) that drives Android phones over USB with Appium.
 
@@ -26,9 +26,9 @@ npm run check   # typecheck, build, tests
 ```
 
 **Setup screen:** the app's **Setup** button checks Node, JDK, adb and Appium, and installs
-anything missing into `~/.local/share/com.sma.desktop/tools` (no sudo). It also adds the Linux
-USB rule (via pkexec) and walks each phone through setup. `SMA_DATA_DIRECTORY` moves the tools folder.
-Test the real downloads: `SMA_DATA_DIRECTORY=/tmp/x cargo test real_install -- --ignored --nocapture`
+anything missing into `~/.local/share/app.tapfleet.desktop/tools` (no sudo). It also adds the Linux
+USB rule (via pkexec) and walks each phone through setup. `TAPFLEET_DATA_DIRECTORY` moves the tools folder.
+Test the real downloads: `TAPFLEET_DATA_DIRECTORY=/tmp/x cargo test real_install -- --ignored --nocapture`
 (in `app/src-tauri`).
 
 Phone: enable USB debugging. On Xiaomi also enable **Install via USB** and
@@ -36,9 +36,11 @@ Phone: enable USB debugging. On Xiaomi also enable **Install via USB** and
 
 **Web access:** the app also serves its UI at `http://<this-pc>:1440` for browsers on other devices
 (same Wi-Fi or Tailscale). Copy the link with the token from **Settings → Web access**.
-`SMA_WEB_ADDR=127.0.0.1:1440` keeps it on this PC only; `SMA_WEB=0` turns it off.
+`TAPFLEET_WEB_ADDR=127.0.0.1:1440` keeps it on this PC only; `TAPFLEET_WEB=0` turns it off.
 The Devices page and Control room show each phone's live screen (scrcpy, installed from Setup):
 click and drag to tap and swipe, scroll to scroll, type to send text, Esc or right-click for Back.
 In dev builds the web page serves `app/dist`, so run `npm --prefix app run build` after UI changes.
 
-Logs: `~/.local/share/com.sma.desktop/logs/appium.log`. Database: `~/.local/share/com.sma.desktop/sma.db`.
+Logs: `~/.local/share/app.tapfleet.desktop/logs/appium.log`. Database: `~/.local/share/app.tapfleet.desktop/tapfleet.db`.
+Installs from before the rename (`com.sma.desktop`, `sma.db`) move over on first start.
+The old `SMA_*` env vars still work.

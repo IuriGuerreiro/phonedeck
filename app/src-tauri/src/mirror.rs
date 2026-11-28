@@ -75,7 +75,7 @@ fn start_server(serial: &str, max_size: u32, light: bool, audio: bool) -> Result
     // 31-bit id, unique per session so several viewers can run at once.
     let scid = format!("{:08x}", rand_u32() & 0x7fff_ffff);
     // The server deletes its jar on start, so push a fresh copy every time.
-    let remote = format!("/data/local/tmp/sma-scrcpy-{scid}.jar");
+    let remote = format!("/data/local/tmp/tapfleet-scrcpy-{scid}.jar");
     adb(serial, &["push", &jar.to_string_lossy(), &remote])?;
 
     let port = free_port()?;
