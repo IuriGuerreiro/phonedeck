@@ -17,19 +17,20 @@ export async function reloadAlerts() {
   listeners.forEach((l) => l());
 }
 
+// Module-level so React keeps one subscription. An inline function would
+// resubscribe on every render, and each resubscribe reloads: an endless loop.
+function subscribe(l: () => void) {
+  listeners.add(l);
+  if (listeners.size === 1) {
+    void reloadAlerts();
+    timer = setInterval(reloadAlerts, 5000);
+  }
+  return () => {
+    listeners.delete(l);
+    if (listeners.size === 0) clearInterval(timer);
+  };
+}
+
 export function useAlerts(): State {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      if (listeners.size === 1) {
-        void reloadAlerts();
-        timer = setInterval(reloadAlerts, 5000);
-      }
-      return () => {
-        listeners.delete(l);
-        if (listeners.size === 0) clearInterval(timer);
-      };
-    },
-    () => state,
-  );
+  return useSyncExternalStore(subscribe, () => state);
 }

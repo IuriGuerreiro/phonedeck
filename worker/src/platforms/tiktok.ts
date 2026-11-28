@@ -124,6 +124,12 @@ async function sheetAccounts(s: Browser): Promise<{ name: string; selected: bool
   return out;
 }
 
+/** The @handle shown on the open profile, without the "@". "" if not found. */
+async function profileHandle(s: Browser, timeout: number) {
+  const el = await findAny(s, [byText("^@.+")], timeout);
+  return el ? (await el.getText()).replace(/^@/, "").replace(/[\uFFFC-\uFFFD]/g, "").trim() : "";
+}
+
 async function closeSheet(s: Browser) {
   const close = await findAny(s, CLOSE, 1500);
   if (close) await close.click();
@@ -218,17 +224,27 @@ export const tiktok: Platform = {
   },
 
   async listAccounts(s) {
+    // The switcher labels rows by display name, which can differ from the @handle.
+    // Read the active account's real handle from the profile first.
+    await openProfile(s);
+    const active = await profileHandle(s, 5000);
     await openSwitcher(s);
-    const accounts = await sheetAccounts(s);
+    // Rows can load a moment after the sheet title.
+    let accounts = await sheetAccounts(s);
+    for (let i = 0; i < 3 && !accounts.length; i++) {
+      await sleep(1000);
+      accounts = await sheetAccounts(s);
+    }
     await closeSheet(s);
     accounts.sort((a, b) => Number(b.selected) - Number(a.selected));
-    return accounts.map((a) => a.name);
+    const names = accounts.map((a) => (a.selected && active ? active : a.name));
+    if (active && !names.some((n) => n.toLowerCase() === active.toLowerCase())) names.unshift(active);
+    return names;
   },
 
   async switchAccount(s, username) {
     await openProfile(s);
-    const active = await findAny(s, [byText("^@.+")], 3000);
-    const activeName = active ? (await active.getText()).replace(/^@/, "").replace(/[\uFFFC-\uFFFD]/g, "").trim() : "";
+    const activeName = await profileHandle(s, 3000);
     if (activeName.toLowerCase() === username.toLowerCase()) return;
     await openSwitcher(s);
     await findAny(s, [byDesc(labelRe(username))], 4000);

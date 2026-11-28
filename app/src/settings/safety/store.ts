@@ -54,16 +54,16 @@ export function setSafety(next: SafetyLimits) {
   }, 400);
 }
 
+/** Module-level so React keeps one subscription (an inline one would reload on every render). */
+function subscribe(l: () => void) {
+  listeners.add(l);
+  // Pick up changes made elsewhere (another browser, the desktop window).
+  if (listeners.size === 1) load();
+  return () => listeners.delete(l);
+}
+
 export function useSafety() {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      // Pick up changes made elsewhere (another browser, the desktop window).
-      if (listeners.size === 1) load();
-      return () => listeners.delete(l);
-    },
-    () => limits,
-  );
+  return useSyncExternalStore(subscribe, () => limits);
 }
 
 /** True if `now` falls inside quiet hours (handles ranges past midnight). */
