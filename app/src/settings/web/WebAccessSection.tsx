@@ -40,7 +40,7 @@ export function WebAccessSection() {
       <SettingSection title="Open Tapfleet in a browser">
         {!info.enabled ? (
           <p className="text-sm text-muted-foreground">
-            {info.error ?? "Web access is off (SMA_WEB=0)."}
+            {info.error ?? "Web access is off (TAPFLEET_WEB=0)."}
           </p>
         ) : (
           <>

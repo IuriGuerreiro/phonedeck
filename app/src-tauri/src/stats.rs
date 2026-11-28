@@ -26,7 +26,7 @@ pub struct DeviceStats {
 }
 
 /// Plain text only: the phone's shell would read `<`, `>` or `|` as redirects.
-const SEP: &str = "@@SMA_SEP@@";
+const SEP: &str = "@@TAPFLEET_SEP@@";
 
 /// One adb round trip for everything. Needs the phone in adb state "device".
 #[tauri::command]

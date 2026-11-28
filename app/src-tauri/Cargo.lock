@@ -3668,25 +3668,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
-name = "sma"
-version = "0.1.0"
-dependencies = [
- "axum",
- "flate2",
- "mime_guess",
- "rusqlite",
- "serde",
- "serde_json",
- "tar",
- "tauri",
- "tauri-build",
- "tauri-plugin-opener",
- "tokio",
- "ureq",
- "zip",
-]
-
-[[package]]
 name = "smallvec"
 version = "1.16.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3957,6 +3938,25 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "tapfleet"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "flate2",
+ "mime_guess",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tar",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-opener",
+ "tokio",
+ "ureq",
+ "zip",
 ]
 
 [[package]]

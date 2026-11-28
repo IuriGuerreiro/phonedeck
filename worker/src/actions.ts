@@ -3,11 +3,11 @@ import { prepareTikTokPost, publishTikTokPost, remoteVideo, oldRemoteVideo, type
 import { mkdir, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import os from "node:os";
 import path from "node:path";
 import { requestStop, shouldStop, withDevice, type Browser } from "./devices.ts";
 import { NeedsAttention, platform, type Platform } from "./platforms/index.ts";
 import { progress, send } from "./protocol.ts";
+import { logDir } from "./env.ts";
 import { checkScreen, classify, fingerprint, readScreen } from "./screen-check.ts";
 import { doubleTap, randInt, sleep, swipeUp } from "./ui.ts";
 
@@ -317,7 +317,7 @@ async function report(s: Browser, job: Job, pkg: string, err: NeedsAttention) {
     appVersion: dump.match(/versionName=(\S+)/)?.[1] ?? null,
     at: new Date().toISOString(),
   };
-  let dir: string | null = path.join(process.env.SMA_LOG_DIR ?? path.join(os.tmpdir(), "sma-logs"), "alerts", `${job.serial.replace(/[^\w.-]/g, "_")}-${Date.now()}`);
+  let dir: string | null = path.join(logDir(), "alerts", `${job.serial.replace(/[^\w.-]/g, "_")}-${Date.now()}`);
   try {
     await mkdir(dir, { recursive: true });
     if (xml) await writeFile(path.join(dir, "screen.xml"), xml);

@@ -1,4 +1,5 @@
 mod posting;
+mod rename;
 mod video_analytics;
 mod adb;
 mod db;
@@ -304,11 +305,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            let data_dir = app.path().app_data_dir()?;
+            // Before the window opens: its webview data lives in this dir too.
+            let data_dir = rename::data_dir(app.path().app_data_dir()?);
             std::fs::create_dir_all(&data_dir)?;
+            if let Some(config) = app.config().app.windows.first() {
+                tauri::WebviewWindowBuilder::from_config(app.handle(), config)?.build()?;
+            }
             setup::init(&data_dir);
             app.manage(posting::Media::new(data_dir.join("posting"))?);
-            app.manage(Db::open(&data_dir.join("sma.db"))?);
+            app.manage(Db::open(&rename::db_path(&data_dir))?);
 
             // Before the worker: its progress events update this.
             app.manage(live::Live::default());

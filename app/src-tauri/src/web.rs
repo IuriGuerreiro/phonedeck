@@ -6,7 +6,8 @@
 //! - Everything else serves the UI.
 //!
 //! The UI is public; every `/api` call needs the token from Settings → Web access.
-//! `SMA_WEB_ADDR` changes the address (default `0.0.0.0:1440`); `SMA_WEB=0` turns it off.
+//! `TAPFLEET_WEB_ADDR` changes the address (default `0.0.0.0:1440`); `TAPFLEET_WEB=0` turns it off.
+//! The old `SMA_*` names still work.
 use std::{
     net::SocketAddr,
     path::{Path as FsPath, PathBuf},
@@ -58,7 +59,7 @@ struct Ctx {
 /// Starts the server in the background. Never fails the app: problems end up in `WebInfo.error`.
 pub fn start(app: &AppHandle, data_dir: &FsPath) -> WebInfo {
     let token = load_or_create_token(data_dir);
-    let addr = std::env::var("SMA_WEB_ADDR").unwrap_or_else(|_| "0.0.0.0:1440".into());
+    let addr = crate::rename::var("WEB_ADDR").unwrap_or_else(|| "0.0.0.0:1440".into());
     let port = addr.rsplit(':').next().and_then(|p| p.parse().ok()).unwrap_or(1440);
     let off = |error: Option<String>| WebInfo {
         enabled: false,
@@ -69,12 +70,12 @@ pub fn start(app: &AppHandle, data_dir: &FsPath) -> WebInfo {
         error,
     };
 
-    if std::env::var("SMA_WEB").as_deref() == Ok("0") {
+    if crate::rename::var("WEB").as_deref() == Some("0") {
         return off(None);
     }
     let addr: SocketAddr = match addr.parse() {
         Ok(a) => a,
-        Err(e) => return off(Some(format!("Bad SMA_WEB_ADDR {addr:?}: {e}"))),
+        Err(e) => return off(Some(format!("Bad TAPFLEET_WEB_ADDR {addr:?}: {e}"))),
     };
     // Bind now so a busy port shows up as an error instead of failing silently later.
     let listener = match std::net::TcpListener::bind(addr).and_then(|l| l.set_nonblocking(true).map(|_| l)) {

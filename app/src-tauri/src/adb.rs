@@ -9,7 +9,7 @@ pub struct AdbDevice {
 }
 
 pub fn adb_path() -> PathBuf {
-    if let Some(p) = std::env::var_os("SMA_ADB") {
+    if let Some(p) = crate::rename::var_os("ADB") {
         return p.into();
     }
     if let Some(p) = crate::setup::managed_adb() {
@@ -46,7 +46,7 @@ pub fn list() -> Result<Vec<AdbDevice>, String> {
     let out = Command::new(adb_path())
         .args(["devices", "-l"])
         .output()
-        .map_err(|e| format!("Could not run adb: {e}. Install Android platform-tools or set SMA_ADB."))?;
+        .map_err(|e| format!("Could not run adb: {e}. Install Android platform-tools or set TAPFLEET_ADB."))?;
     if !out.status.success() {
         return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
     }

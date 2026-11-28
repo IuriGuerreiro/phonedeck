@@ -5,7 +5,7 @@ import { closeAll, setAppiumPort } from "../src/devices.ts";
 import { runJob } from "../src/actions.ts";
 const [serial, username] = process.argv.slice(2);
 if (!serial || !username) throw new Error("Usage: node test/account-analytics-live.ts SERIAL USERNAME");
-const server = await startAppium(4723, "/tmp/sma-analytics-test");
+const server = await startAppium(4723, "/tmp/tapfleet-analytics-test");
 setAppiumPort(server.port);
 try {
   const result = await runJob({ action: "account_analytics", serial, platform: "tiktok", username });

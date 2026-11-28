@@ -7,7 +7,7 @@ import { readProfileVideos } from "../src/platforms/tiktok.ts";
 import { sleep } from "../src/ui.ts";
 const [serial, username, mode] = process.argv.slice(2);
 if (!serial || !username) throw new Error("Usage: node test/video-analytics-live.ts SERIAL USERNAME [--public-profile]");
-const server = await startAppium(4731, "/tmp/sma-video-analytics-test");
+const server = await startAppium(4731, "/tmp/tapfleet-video-analytics-test");
 setAppiumPort(server.port);
 try {
   const result = mode === "--public-profile" ? await withDevice(serial, async (s) => {

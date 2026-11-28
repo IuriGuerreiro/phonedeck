@@ -162,7 +162,7 @@ mod tests {
 
     #[test]
     fn enforces_limits_from_recorded_runs() {
-        let path = std::env::temp_dir().join(format!("sma-safety-{}.db", std::process::id()));
+        let path = std::env::temp_dir().join(format!("tapfleet-safety-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let db = Db::open(&path).unwrap();
         // No quiet hours, so the test doesn't depend on the clock.

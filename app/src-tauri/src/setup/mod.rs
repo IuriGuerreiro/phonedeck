@@ -2,7 +2,7 @@
 //! data dir (`<data>/tools`), with no sudo. Rust then hands those paths to the worker.
 //!
 //! Layout:
-//!   tools/android-sdk/platform-tools/adb   ANDROID_HOME, SMA_ADB
+//!   tools/android-sdk/platform-tools/adb   ANDROID_HOME, TAPFLEET_ADB
 //!   tools/jdk/bin/java                     JAVA_HOME
 //!   tools/appium/node_modules/...          APPIUM_HOME (Appium + uiautomator2 driver)
 //!   tools/scrcpy/scrcpy                    screen viewer (optional)
@@ -26,13 +26,13 @@ use tauri::{AppHandle, Emitter};
 static TOOLS_DIR: OnceLock<PathBuf> = OnceLock::new();
 static INSTALLING: Mutex<()> = Mutex::new(());
 
-/// Call once at startup. `SMA_DATA_DIRECTORY` overrides the app data dir (handy for tests).
+/// Call once at startup. `TAPFLEET_DATA_DIRECTORY` (or the old `SMA_DATA_DIRECTORY`) overrides the app data dir (handy for tests).
 pub fn init(app_data_dir: &Path) {
     let _ = TOOLS_DIR.set(tools_dir_for(app_data_dir));
 }
 
 pub fn tools_dir_for(app_data_dir: &Path) -> PathBuf {
-    std::env::var_os("SMA_DATA_DIRECTORY")
+    crate::rename::var_os("DATA_DIRECTORY")
         .map(PathBuf::from)
         .unwrap_or_else(|| app_data_dir.to_path_buf())
         .join("tools")
@@ -76,7 +76,7 @@ fn managed() -> Option<Managed> {
 }
 
 /// adb installed by Tapfleet, if any. Used by `adb::adb_path`.
-/// The scrcpy server jar next to the scrcpy binary in use (managed install or $SMA_SCRCPY).
+/// The scrcpy server jar next to the scrcpy binary in use (managed install or $TAPFLEET_SCRCPY).
 pub fn scrcpy_server() -> Option<PathBuf> {
     let bin = scrcpy_bin();
     let dir = if bin.is_absolute() { bin.parent()?.to_path_buf() } else { managed()?.root.join("scrcpy") };
@@ -87,9 +87,9 @@ pub fn managed_adb() -> Option<PathBuf> {
     managed().map(|m| m.adb()).filter(|p| p.exists())
 }
 
-/// scrcpy to run: $SMA_SCRCPY, else the one Tapfleet installed, else `scrcpy` on PATH.
+/// scrcpy to run: $TAPFLEET_SCRCPY, else the one Tapfleet installed, else `scrcpy` on PATH.
 pub fn scrcpy_bin() -> PathBuf {
-    if let Some(p) = std::env::var_os("SMA_SCRCPY") {
+    if let Some(p) = crate::rename::var_os("SCRCPY") {
         return p.into();
     }
     managed().map(|m| m.scrcpy()).filter(|p| p.exists()).unwrap_or_else(|| "scrcpy".into())
@@ -101,7 +101,7 @@ pub fn worker_env() -> Vec<(&'static str, OsString)> {
     let mut env = vec![];
     if m.adb().exists() {
         env.push(("ANDROID_HOME", m.sdk().into()));
-        env.push(("SMA_ADB", m.adb().into()));
+        env.push(("TAPFLEET_ADB", m.adb().into()));
     }
     if m.java().exists() {
         env.push(("JAVA_HOME", m.jdk().into()));
@@ -158,7 +158,7 @@ fn run_capture(cmd: &Path, args: &[&str]) -> Option<String> {
 }
 
 pub fn node_bin() -> PathBuf {
-    std::env::var_os("SMA_NODE").map(PathBuf::from).unwrap_or_else(|| "node".into())
+    crate::rename::var_os("NODE").map(PathBuf::from).unwrap_or_else(|| "node".into())
 }
 
 fn check_node() -> ToolStatus {
@@ -166,7 +166,7 @@ fn check_node() -> ToolStatus {
     let version = run_capture(&node, &["--version"]).map(|v| v.trim().to_string());
     let major = version.as_deref().and_then(|v| v.trim_start_matches('v').split('.').next()?.parse::<u32>().ok());
     let problem = match major {
-        None => Some("Node.js not found. Install Node 24+ from nodejs.org (or set SMA_NODE).".into()),
+        None => Some("Node.js not found. Install Node 24+ from nodejs.org (or set TAPFLEET_NODE).".into()),
         Some(m) if m < 24 => Some(format!("Node {m} is too old. Tapfleet needs Node 24+.")),
         _ => None,
     };
@@ -360,11 +360,11 @@ mod tests {
     }
 
     /// Downloads the real scrcpy release (~10 MB).
-    /// `SMA_DATA_DIRECTORY=/tmp/x cargo test real_install_scrcpy -- --ignored --nocapture`
+    /// `TAPFLEET_DATA_DIRECTORY=/tmp/x cargo test real_install_scrcpy -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn real_install_scrcpy() {
-        let dir = std::env::var_os("SMA_DATA_DIRECTORY").expect("set SMA_DATA_DIRECTORY");
+        let dir = crate::rename::var_os("DATA_DIRECTORY").expect("set TAPFLEET_DATA_DIRECTORY");
         let m = Managed::new(PathBuf::from(dir).join("tools"));
         install::install(&m, "scrcpy", &|p: Progress| {
             if p.total.is_none() {
@@ -379,11 +379,11 @@ mod tests {
     }
 
     /// Runs the real installers. Downloads ~250 MB.
-    /// `SMA_DATA_DIRECTORY=/tmp/x cargo test real_install -- --ignored --nocapture`
+    /// `TAPFLEET_DATA_DIRECTORY=/tmp/x cargo test real_install -- --ignored --nocapture`
     #[test]
     #[ignore]
     fn real_install() {
-        let dir = std::env::var_os("SMA_DATA_DIRECTORY").expect("set SMA_DATA_DIRECTORY");
+        let dir = crate::rename::var_os("DATA_DIRECTORY").expect("set TAPFLEET_DATA_DIRECTORY");
         let m = Managed::new(PathBuf::from(dir).join("tools"));
         let last = Mutex::new(String::new());
         let emit = |p: Progress| {

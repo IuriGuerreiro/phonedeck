@@ -4,15 +4,14 @@
 //   out: {"event": "ready", "appiumPort": 4723}  once Appium is up
 // stdout is reserved for protocol messages; diagnostics go to stderr.
 import { createInterface } from "node:readline";
-import os from "node:os";
-import path from "node:path";
 import { isUp, startAppium } from "./appium.ts";
 import { closeAll, setAppiumPort, setAppiumReviver } from "./devices.ts";
 import { runJob, type Job } from "./actions.ts";
 import { send } from "./protocol.ts";
+import { envVar, logDir as getLogDir } from "./env.ts";
 
-const port = Number(process.env.SMA_APPIUM_PORT ?? 4723);
-const logDir = process.env.SMA_LOG_DIR ?? path.join(os.tmpdir(), "sma-logs");
+const port = Number(envVar("APPIUM_PORT") ?? 4723);
+const logDir = getLogDir();
 
 let appium: Awaited<ReturnType<typeof startAppium>>;
 try {
