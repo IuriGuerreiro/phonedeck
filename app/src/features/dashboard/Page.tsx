@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import { Bell, CalendarClock, CheckCheck, Flame, Moon, ShieldCheck, Smartphone } from "lucide-react";
 
 import { BarChart } from "@/components/shared/charts";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { parseTime, timeAgo } from "@/lib/time";
@@ -21,15 +20,10 @@ import { untilText, type PlannedRun } from "./runs";
 
 const isToday = (time: string) => parseTime(time).toDateString() === new Date().toDateString();
 
-/** Not wired yet: needs warm-up minutes per day from the backend. */
-const SAMPLE_WEEK = [32, 41, 0, 28, 45, 37, 22].map((value, i) => ({
-  label: new Date(Date.now() - (6 - i) * 86_400_000).toLocaleDateString([], { weekday: "short" }),
-  value,
-}));
-
 export default function DashboardPage() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [week, setWeek] = useState<{ label: string; value: number }[]>([]);
   const [planned, setPlanned] = useState<PlannedRun[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -40,13 +34,14 @@ export default function DashboardPage() {
   useEffect(() => {
     let alive = true;
     const load = () => {
-      Promise.all([devicesApi.list(), accountsApi.list(), api.listSchedules(), api.listGroups(), api.upcomingRuns(8)]).then(
-        ([d, a, schedules, groups, runs]) => {
+      Promise.all([devicesApi.list(), accountsApi.list(), api.listSchedules(), api.listGroups(), api.upcomingRuns(8), api.warmupDays(7)]).then(
+        ([d, a, schedules, groups, runs, days]) => {
           if (!alive) return;
           const members = (groupId: number | null) =>
             groupId === null ? a.length : a.filter((x) => groups.find((g) => g.id === groupId)?.accountIds.includes(x.id)).length;
           setDevices(d);
           setAccounts(a);
+          setWeek(days.map((x) => ({ label: new Date(`${x.date}T12:00:00`).toLocaleDateString([], { weekday: "short" }), value: x.minutes })));
           setPlanned(
             runs.map((r) => ({
               key: `${r.scheduleId}-${r.date}-${r.at}`,
@@ -116,13 +111,11 @@ export default function DashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              Warm-up activity <Badge variant="outline">Sample data</Badge>
-            </CardTitle>
+            <CardTitle>Warm-up activity</CardTitle>
             <CardDescription>Last 7 days</CardDescription>
           </CardHeader>
           <CardContent>
-            <BarChart unit="min" data={SAMPLE_WEEK} />
+            {week.length ? <BarChart unit="min" data={week} /> : <p className="text-sm text-muted-foreground">Loading…</p>}
           </CardContent>
         </Card>
 

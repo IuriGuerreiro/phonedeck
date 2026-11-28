@@ -18,8 +18,6 @@ export type SettingsSectionDef = {
   /** Heading above this item in the modal's left nav. Omit for the top block. */
   group?: string;
   component: ComponentType;
-  /** Not used by real jobs yet: shows a "Preview" badge. */
-  preview?: boolean;
   /** Shows "Restore defaults" in the header when set. */
   restoreDefaults?: () => void;
 };

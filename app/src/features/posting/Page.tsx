@@ -84,7 +84,6 @@ export default function PostingPage() {
       {post.error && <p className="text-sm text-destructive">{post.error}</p>}
       {post.status === "ready" && <p className="text-sm text-muted-foreground">Review the video on the phone. Publish submits it to TikTok with the caption and visibility shown here.</p>}
       {post.status === "uncertain" && <p className="text-sm text-muted-foreground">Check this account on TikTok to see whether the video was posted. This draft will not be retried automatically.</p>}
-      {post.status === "submitted" && <a className="self-start text-sm underline" href="#video-analytics">Open video analytics</a>}
       <div className="flex flex-wrap gap-2">
         {["draft", "failed"].includes(post.status) && <Button size="sm" disabled={busy} onClick={() => action(() => api.postNow(post.id), "Posted. The video is on the profile.")}>Post now · {post.visibility === "private" ? "Only you" : "Everyone"}</Button>}
         {["draft", "failed", "ready"].includes(post.status) && <Button size="sm" variant="outline" disabled={busy} onClick={() => action(() => api.preparePost(post.id), "Video prepared. Review it on the phone, then choose Publish.")}>{post.status === "ready" ? "Prepare again" : "Prepare on phone"}</Button>}

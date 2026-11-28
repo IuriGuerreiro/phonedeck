@@ -1,6 +1,5 @@
 import type { Feature } from "./types";
 import { feature as activity } from "./activity";
-import { feature as accountAnalytics } from "./account-analytics";
 import { feature as accounts } from "./accounts";
 import { feature as alerts } from "./alerts";
 import { feature as controlRoom } from "./control-room";
@@ -9,7 +8,6 @@ import { feature as devices } from "./devices";
 import { feature as posting } from "./posting";
 import { feature as schedule } from "./schedule";
 import { feature as setup } from "./setup";
-import { feature as videoAnalytics } from "./video-analytics";
 
 export type { Feature } from "./types";
 
@@ -26,7 +24,5 @@ export const features: Feature[] = [
   accounts,
   schedule,
   posting,
-  accountAnalytics,
-  videoAnalytics,
   setup,
 ];

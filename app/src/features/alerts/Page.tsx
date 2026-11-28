@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { reloadAlerts, useAlerts } from "@/data/alerts";
-import { timeAgo } from "@/lib/mock";
+import { timeAgo } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { ALERT_KIND, alertTitle } from "./kinds";
 
